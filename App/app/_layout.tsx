@@ -10,9 +10,10 @@ import { colores } from '../src/theme/tokens';
 /**
  * Stack raíz y proveedores globales.
  *
- * Por ahora sólo monta la sesión. El proveedor de sincronización y la ruta del
- * escáner entran con las pantallas de operación: dependen de la cola local y
- * del endpoint de envío por lotes, que son trabajo posterior.
+ * Monta la sesión y declara el escáner como modal. El proveedor de
+ * sincronización todavía no entra: la cola local de pendientes y el envío por
+ * lotes dependen del backend, que es trabajo posterior. Mientras tanto los
+ * movimientos se registran contra el repositorio en memoria.
  */
 export default function LayoutRaiz() {
   return (
@@ -31,6 +32,10 @@ export default function LayoutRaiz() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="escaner"
+              options={{ presentation: 'modal', title: 'Escanear cilindro' }}
+            />
           </Stack>
         </ProveedorSesion>
       </SafeAreaProvider>
