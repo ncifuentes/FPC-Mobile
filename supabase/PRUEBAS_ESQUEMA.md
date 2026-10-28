@@ -139,3 +139,116 @@ Después de las pruebas se verificó que no quedó ningún dato de prueba:
   la hizo el equipo en PostgreSQL 16; no se repitió en esta sesión.
 - **Sprint:** la tarjeta corresponde al Sprint 3 (28-09 al 11-10). Esta
   verificación se ejecutó el 23-10, fuera del plazo del sprint.
+
+---
+
+## Sprint 4 — Clientes, informe de envases arrendados y Realtime
+
+**Fecha de ejecución:** 28-10-2026
+**Proyecto:** `betqgklumvpneppoqhph` (fpc-mobile, región us-east-1, plan gratuito)
+**Herramienta:** Supabase CLI 2.122.0, `npx supabase db push` y `npx supabase db query --linked`
+**Ejecutado por:** Nicolás Castillo
+
+### 1. Migraciones aplicadas
+
+`npx supabase db push` aplicó las tres migraciones nuevas sin errores:
+
+| # | Archivo | Contenido |
+|---|---|---|
+| 07 | `20261026100000_migrar_clientes_y_sucursales.sql` | 181 clientes y 190 sucursales desde `Clientes_filtro.xlsx` |
+| 08 | `20261026110000_informe_envases_arrendados.sql` | Función `informe_envases_arrendados`, `SECURITY INVOKER` |
+| 09 | `20261026120000_realtime_movimientos.sql` | Agrega `movimientos` a la publicación `supabase_realtime` |
+
+### 2. Verificación de estructura y datos
+
+| Comprobación | Esperado | Obtenido | Resultado |
+|---|---|---|---|
+| Clientes | 181 | 181 | ✅ |
+| Sucursales | 190 | 190 | ✅ |
+| Sucursales principales | 181 | 181 | ✅ |
+| Sucursales sin región | 0 | 0 | ✅ |
+| Clientes con más de una sucursal | 6 | 6 | ✅ |
+| `movimientos` en `supabase_realtime` | presente | presente | ✅ |
+
+Distribución por región (obtenida):
+
+| Región | Sucursales | % |
+|---|---|---|
+| Metropolitana | 116 | 61,1 % |
+| Maule | 40 | 21,1 % |
+| O'Higgins | 23 | 12,1 % |
+| Valparaíso | 6 | 3,2 % |
+| La Araucanía | 4 | 2,1 % |
+| Los Ríos | 1 | 0,5 % |
+
+La RM sale ~61 %, no ~80 % como decía el audio inicial del levantamiento. Coincide con lo
+esperado en la tarjeta del Sprint 4.
+
+### 3. Advisor de seguridad
+
+`npx supabase db advisors --linked` encontró **un hallazgo nuevo de categoría SECURITY**
+que no estaba antes de esta migración:
+
+| Nivel | Función/tabla | Detalle |
+|---|---|---|
+| WARN (SECURITY) | `public.informe_envases_arrendados` | `search_path` mutable: la función no fija `search_path`, así que un `search_path` de sesión hostil podría hacer que resuelva `public.movimientos`, `public.cilindros`, etc. contra objetos de otro schema. |
+
+**Esto no estaba cubierto por "debe seguir sin hallazgos de seguridad"** del encargo
+original: la migración 08 introduce una función nueva y esa función quedó sin
+`set search_path = ...`. No se tocó la migración para corregirlo (está marcada como "no
+reescribir"); queda para que el equipo decida si agrega `set search_path = public, pg_temp`
+a la función en una migración aparte.
+
+Además siguen los dos avisos de rendimiento (no seguridad) ya conocidos, sobre políticas
+permisivas múltiples en `movimientos` para `admin`/`tecnico` — preexistentes desde el
+Sprint 3, no introducidos por esta migración.
+
+### 4. Nota metodológica: cómo se corrieron las pruebas
+
+`supabase/pruebas/prueba_sprint4.sql` está escrito para `psql` (usa `\set`, `\gset`,
+`\echo`, `\pset`). En esta máquina no hay `psql` ni Docker instalados, y
+`npx supabase db query` no tiene un subcomando `execute` ni entiende metacomandos de
+psql. El archivo **no se modificó**; en su lugar se ejecutó una traducción 1:1 a SQL
+puro (mismos datos de fixture, mismas fechas, mismo orden, misma función, mismas
+aserciones), reemplazando las variables de psql por `set_config(..., false)` y leyendo
+los seis casos en un único `SELECT` final dentro de la misma transacción — sin `ROLLBACK`
+explícito, porque revertir la transacción también deshace el `set_config` no local
+(comportamiento documentado de Postgres). Al no haber `COMMIT`, Postgres aborta la
+transacción sola al cerrar la conexión; la sección 5 confirma que no quedó nada.
+
+### 5. Pruebas de la función `informe_envases_arrendados`
+
+Caso de referencia: informe real "Detalles de Alquiler de Cilindros" (WESEH0) que KAME
+ONE emitió el 26/10/2026 para el cliente `000298`.
+
+| Caso | Qué prueba | Esperado | Obtenido | Resultado |
+|---|---|---|---|---|
+| 1 | Informe real de octubre | `RENC53` 3/74 · `RENC54` 0/6 · `RENN57` 2/78 · total 5/158 | `RENC53` 3/74 · `RENC54` 0/6 · `RENN57` 2/78 · total **envases=5 dias=158** | ✅ |
+| 2 | Corte al 15/10 | `RENC53` 2/30 · `RENC54` 0/6 · `RENN57` 2/48 · total 4/84 | `RENC53` 2/30 · `RENC54` 0/6 · `RENN57` 2/48 | ✅ |
+| 3 | Septiembre, sin devoluciones en el periodo | `RENC53` 2/52 · `RENC54` 1/30 · `RENN57` 5/94 | `RENC53` 2/52 · `RENC54` 1/30 · `RENN57` 5/94 | ✅ |
+| 4 | Envase `PRO` entregado no se arrienda | total sigue en 5/158 | **envases=5 dias=158** | ✅ |
+| 5 | Técnico no puede pedir el informe | rechazado | `OK rechazado: El informe de arriendo solo esta disponible para admin o gerente` | ✅ |
+| 6 | Periodo invertido / corte fuera del periodo | ambos rechazados | `OK rechazado: Periodo invalido: p_desde=2026-10-31 p_hasta=2026-10-01` · `OK rechazado: La fecha de corte 2026-11-20 debe caer dentro del periodo 2026-10-01 a 2026-10-31` | ✅ |
+
+Comprobación previa: los 11 cilindros del informe real están en el parque cargado
+(`11 de 11`).
+
+**Resultado: 6 de 6 casos pasaron, con los números exactos del informe real.**
+
+### 6. Limpieza
+
+| Comprobación | Resultado |
+|---|---|
+| Clientes de prueba (`rut='76111222-3'`) | 0 |
+| Camiones de prueba (`patente='PRUE98'`) | 0 |
+| Usuarios de prueba (`nombre like '% Prueba'`) | 0 |
+| `auth.users` huérfanos sin email ni fila en `usuarios` | 0 |
+| `movimientos` en la base | 0 |
+
+### 7. Observaciones abiertas del Sprint 4
+
+- **Hallazgo de seguridad nuevo:** ver sección 3. `informe_envases_arrendados` queda sin
+  `search_path` fijo; no se corrigió porque implicaba tocar la migración ya probada.
+- **No se probó `db reset` desde cero** por la misma razón que en el Sprint 3: no hay
+  Docker en esta máquina.
+- **No se conectó la app a Supabase.** Queda para el Sprint 5, según la tarjeta.
