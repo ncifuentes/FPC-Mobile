@@ -3,7 +3,8 @@
  * Marco de todas las páginas que requieren sesión: menú lateral, barra superior y la guardia
  * que redirige al login. Las secciones marcadas como "pronto" se habilitan a medida que se
  * construyen (orden acordado: tablero, ficha de cilindro, informe de arriendo, ficha de
- * cliente, mantenedores, corrección de movimientos).
+ * cliente, mantenedores, corrección de movimientos). Los nombres siguen el wireframe de la
+ * plataforma web (Sprint4_Wireframe_Plataforma_Web.pdf).
  */
 import Base from './Base.astro';
 import Marca from '../components/Marca.astro';
@@ -18,11 +19,11 @@ const { titulo, seccion } = Astro.props;
 
 const secciones = [
   { id: 'inicio', nombre: 'Inicio', href: '/', lista: true },
-  { id: 'movimientos', nombre: 'Movimientos', href: '/movimientos', lista: false },
-  { id: 'cilindros', nombre: 'Cilindros', href: '/cilindros', lista: false },
+  { id: 'tablero', nombre: 'Tablero del día', href: '/tablero', lista: true },
+  { id: 'cilindros', nombre: 'Cilindros', href: '/cilindros', lista: true },
   { id: 'clientes', nombre: 'Clientes', href: '/clientes', lista: false },
   { id: 'informe', nombre: 'Informe de arriendo', href: '/informe', lista: false },
-  { id: 'usuarios', nombre: 'Usuarios', href: '/usuarios', lista: false },
+  { id: 'mantenedores', nombre: 'Mantenedores', href: '/mantenedores', lista: false },
 ];
 ---
 <Base titulo={titulo} sesionPendiente>

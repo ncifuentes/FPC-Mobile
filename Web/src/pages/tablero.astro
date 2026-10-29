@@ -1,0 +1,7 @@
+---
+import Panel from '../layouts/Panel.astro';
+import TableroDia from '../components/TableroDia';
+---
+<Panel titulo="Tablero del día" seccion="tablero">
+  <TableroDia client:only="react" />
+</Panel>

@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { obtenerPerfil } from '../lib/sesion';
 import type { Enum, Fila } from '../lib/database.types';
 import { formatoFechaHora, inicioDeHoyEnChile, NOMBRE_TIPO, numero } from '../lib/formato';
+import { COLOR_ESTADO, COLOR_TIPO } from '../lib/estilos';
+import { urlFicha } from '../lib/cilindros';
 
 type Estado = Enum<'estado_cilindro'>;
 type Movimiento = Pick<
@@ -18,16 +20,10 @@ interface Datos {
 }
 
 const ESTADOS: { estado: Estado; titulo: string; detalle: string; clase: string }[] = [
-  { estado: 'en_planta', titulo: 'En planta', detalle: 'En poder de FPC', clase: 'bg-gris-100 text-gris-700' },
-  { estado: 'en_camion', titulo: 'En camión', detalle: 'Cargados en un vehículo', clase: 'bg-azul-100 text-azul-700' },
-  { estado: 'en_cliente', titulo: 'En cliente', detalle: 'Entregados, generan arriendo', clase: 'bg-verde-100 text-verde-700' },
+  { estado: 'en_planta', titulo: 'En planta', detalle: 'En poder de FPC', clase: COLOR_ESTADO.en_planta },
+  { estado: 'en_camion', titulo: 'En camión', detalle: 'Cargados en un vehículo', clase: COLOR_ESTADO.en_camion },
+  { estado: 'en_cliente', titulo: 'En cliente', detalle: 'Entregados, generan arriendo', clase: COLOR_ESTADO.en_cliente },
 ];
-
-const COLOR_TIPO: Record<Enum<'tipo_movimiento'>, string> = {
-  carga: 'bg-azul-100 text-azul-700',
-  entrega: 'bg-verde-100 text-verde-700',
-  retiro: 'bg-alerta-fondo text-alerta',
-};
 
 async function contarEstado(estado: Estado): Promise<number> {
   const { count, error } = await supabase
@@ -111,8 +107,11 @@ export default function ResumenInicio() {
       </section>
 
       <section className="rounded-lg border border-gris-200 bg-white shadow-sm">
-        <header className="border-b border-gris-200 px-5 py-4">
+        <header className="flex items-center justify-between gap-4 border-b border-gris-200 px-5 py-4">
           <h2 className="text-base font-bold text-gris-900">Últimos movimientos</h2>
+          <a href="/tablero" className="text-sm font-semibold text-azul-700 hover:underline">
+            Ver tablero del día →
+          </a>
         </header>
         {datos.recientes.length === 0 ? (
           <p className="px-5 py-6 text-sm text-gris-500">Todavía no hay movimientos registrados.</p>
@@ -142,7 +141,9 @@ export default function ResumenInicio() {
                       ) : null}
                     </td>
                     <td className="px-5 py-3">
-                      <span className="font-medium text-gris-900">{m.numero_serie}</span>
+                      <a href={urlFicha(m.numero_serie)} className="font-medium text-azul-700 hover:underline">
+                        {m.numero_serie}
+                      </a>
                       {m.codigo_origen === 'manual' ? (
                         <span className="ml-2 text-xs text-alerta" title="Código ingresado a mano">
                           manual

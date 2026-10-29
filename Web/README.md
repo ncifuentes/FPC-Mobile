@@ -29,22 +29,26 @@ Otros comandos:
 
 ```bash
 npm run check    # verificación de tipos
-npm run build    # verificación + sitio estático en web/dist
-npm run preview  # sirve web/dist para revisarlo
+npm run build    # verificación + sitio estático en Web/dist
+npm run preview  # sirve Web/dist para revisarlo
 ```
 
 ## Cómo está organizado
 
 ```
-web/
+Web/
 ├── src/
-│   ├── pages/          rutas: login.astro, index.astro (inicio)
+│   ├── pages/          rutas: login, inicio, tablero, cilindros/ (listado y ficha)
 │   ├── layouts/        Base (html) y Panel (menú, barra superior y guardia de sesión)
 │   ├── components/     islas de React y piezas de Astro
 │   ├── lib/
 │   │   ├── supabase.ts        cliente único de Supabase
 │   │   ├── sesion.ts          inicio y cierre de sesión, perfil y rol
 │   │   ├── formato.ts         fechas en hora de Chile y textos de la interfaz
+│   │   ├── estilos.ts         colores por tipo de movimiento y por estado
+│   │   ├── tablero.ts         datos y cálculos del tablero del día
+│   │   ├── cilindros.ts       listado buscable y ficha de un cilindro
+│   │   ├── tiempoReal.ts      suscripción Realtime a los cambios de movimientos
 │   │   └── database.types.ts  tipos generados desde el esquema
 │   └── styles/global.css
 └── tailwind.config.ts  toma la paleta y los radios de App/src/theme/tokens.ts
@@ -63,6 +67,15 @@ web/
 - **Astro 6 y no 7.** Astro 6 corre desde Node 22.12, así que funciona en los computadores de
   todo el equipo sin actualizar Node; Astro 7 exige Node 22.23 o superior y no trae nada que
   este panel necesite. Se evalúa subir de versión después de la entrega.
+- **Tablero en tiempo real.** El tablero se suscribe por Realtime a los cambios de
+  `movimientos`; cada inserción o corrección vuelve a leer el día desde `v_movimientos`
+  (varios cambios seguidos se juntan en una sola lectura). El aviso «con retraso» marca lo que
+  llegó al servidor 30 minutos o más después de ocurrir: lo que aún está en el teléfono sin
+  señal no existe en la base y no se puede mostrar (ver bitácora 20-10).
+- **Ficha por parámetro.** Como el sitio es estático, la ficha de un cilindro vive en
+  `/cilindros/ficha?serie=<serie>` y no en `/cilindros/<serie>` (así no hay que generar una
+  página por cada uno de los 2.178 envases). La serie se busca por `serie_normalizada`, así que
+  da lo mismo escribirla con espacios o en minúsculas.
 - **Vite fijado en 7.3.7** (`overrides` en `package.json`): Astro 6 usa Vite 7 y el plugin de
   Tailwind trae Vite 8 por defecto; sin el override, `astro check` falla por tipos
   incompatibles entre ambas versiones.
@@ -73,8 +86,8 @@ web/
 |---|---|---|
 | Login, menú y roles | HU-11, HU-20 | Listo |
 | Inicio: parque por estado y últimos movimientos | HU-15 (parcial) | Listo |
-| Tablero del día y movimientos en vivo | HU-15, HU-19 | Pendiente |
-| Ficha del cilindro | HU-16 | Pendiente |
+| Tablero del día y movimientos en vivo | HU-15, HU-19 | Listo |
+| Listado y ficha del cilindro | HU-16 | Listo |
 | Informe de arriendo del mes | HU-23 | Pendiente |
 | Ficha del cliente | HU-17 | Pendiente |
 | Mantenedores de clientes, cilindros y usuarios | HU-12 a HU-14 | Pendiente |

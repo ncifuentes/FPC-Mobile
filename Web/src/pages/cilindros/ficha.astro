@@ -1,0 +1,12 @@
+---
+/**
+ * Ficha de un cilindro: /cilindros/ficha?serie=<N° de serie>.
+ * El sitio es estático, así que la serie viaja como parámetro y no como parte de la ruta
+ * (el wireframe la dibujaba como /cilindros/{serie}).
+ */
+import Panel from '../../layouts/Panel.astro';
+import FichaCilindro from '../../components/FichaCilindro';
+---
+<Panel titulo="Ficha del cilindro" seccion="cilindros">
+  <FichaCilindro client:only="react" />
+</Panel>
