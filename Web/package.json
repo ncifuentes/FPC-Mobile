@@ -1,0 +1,34 @@
+{
+  "name": "fpc-mobile-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plataforma web de administración de FPC Mobile (Astro + islas de React sobre Supabase).",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/react": "5.0.7",
+    "@supabase/supabase-js": "2.118.0",
+    "@tailwindcss/vite": "4.3.3",
+    "astro": "6.4.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "vite": "7.3.7"
+  }
+}

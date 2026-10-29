@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro';
+import Marca from '../components/Marca.astro';
+import FormularioLogin from '../components/FormularioLogin';
+---
+<Base titulo="Iniciar sesión">
+  <div class="grid min-h-dvh place-items-center bg-gris-50 px-4 py-10">
+    <div class="w-full max-w-sm">
+      <div class="mb-8">
+        <Marca tamano="grande" />
+      </div>
+      <div class="rounded-xl border border-gris-200 bg-white p-6 shadow-sm sm:p-8">
+        <FormularioLogin client:only="react" />
+      </div>
+      <p class="mt-6 text-center text-xs text-gris-400">
+        Plataforma de administración · Comprometidos con la energía que mueve tu industria
+      </p>
+    </div>
+  </div>
+</Base>

@@ -1,0 +1,22 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  titulo: string;
+  sesionPendiente?: boolean;
+}
+const { titulo, sesionPendiente = false } = Astro.props;
+---
+<!doctype html>
+<html lang="es-CL" data-sesion={sesionPendiente ? 'pendiente' : undefined}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{titulo} · FPC Servicios</title>
+  </head>
+  <body class="min-h-dvh">
+    <slot />
+  </body>
+</html>

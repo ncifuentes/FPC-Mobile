@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+@config '../../tailwind.config.ts';
+
+@layer base {
+  html {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    @apply bg-gris-50 text-gris-900 antialiased;
+  }
+
+  /* Mientras se verifica la sesión no se muestra el panel, para no mostrar datos a quien
+     no inició sesión ni hacer un parpadeo antes de redirigir al login. */
+  html[data-sesion='pendiente'] [data-panel] {
+    visibility: hidden;
+  }
+}

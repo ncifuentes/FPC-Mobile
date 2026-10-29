@@ -1,0 +1,82 @@
+---
+/**
+ * Marco de todas las páginas que requieren sesión: menú lateral, barra superior y la guardia
+ * que redirige al login. Las secciones marcadas como "pronto" se habilitan a medida que se
+ * construyen (orden acordado: tablero, ficha de cilindro, informe de arriendo, ficha de
+ * cliente, mantenedores, corrección de movimientos).
+ */
+import Base from './Base.astro';
+import Marca from '../components/Marca.astro';
+import GuardiaSesion from '../components/GuardiaSesion';
+import MenuUsuario from '../components/MenuUsuario';
+
+interface Props {
+  titulo: string;
+  seccion: string;
+}
+const { titulo, seccion } = Astro.props;
+
+const secciones = [
+  { id: 'inicio', nombre: 'Inicio', href: '/', lista: true },
+  { id: 'movimientos', nombre: 'Movimientos', href: '/movimientos', lista: false },
+  { id: 'cilindros', nombre: 'Cilindros', href: '/cilindros', lista: false },
+  { id: 'clientes', nombre: 'Clientes', href: '/clientes', lista: false },
+  { id: 'informe', nombre: 'Informe de arriendo', href: '/informe', lista: false },
+  { id: 'usuarios', nombre: 'Usuarios', href: '/usuarios', lista: false },
+];
+---
+<Base titulo={titulo} sesionPendiente>
+  <GuardiaSesion client:only="react" />
+  <div data-panel class="flex min-h-dvh flex-col lg:flex-row">
+    <aside class="bg-azul-700 lg:w-64 lg:shrink-0">
+      <div class="flex items-center justify-between px-5 py-4 lg:py-6">
+        <Marca claro />
+      </div>
+      <nav aria-label="Secciones" class="overflow-x-auto px-3 pb-3 lg:pb-6">
+        <ul class="flex gap-1 lg:flex-col">
+          {
+            secciones.map((s) => (
+              <li class="shrink-0">
+                {s.lista ? (
+                  <a
+                    href={s.href}
+                    aria-current={s.id === seccion ? 'page' : undefined}
+                    class:list={[
+                      'block rounded-sm px-3 py-2 text-sm font-medium whitespace-nowrap',
+                      s.id === seccion ? 'bg-white text-azul-700' : 'text-azul-100 hover:bg-white/10 hover:text-white',
+                    ]}
+                  >
+                    {s.nombre}
+                  </a>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    title="Disponible en una próxima entrega"
+                    class="flex items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm whitespace-nowrap text-azul-200/70"
+                  >
+                    {s.nombre}
+                    <span class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                      Pronto
+                    </span>
+                  </span>
+                )}
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </aside>
+
+    <div class="flex min-w-0 flex-1 flex-col">
+      <header class="flex items-center justify-between gap-4 border-b border-gris-200 bg-white px-5 py-3 lg:px-8">
+        <p class="text-sm font-semibold text-gris-500">{titulo}</p>
+        <MenuUsuario client:only="react" />
+      </header>
+      <main class="flex-1 px-5 py-6 lg:px-8 lg:py-8">
+        <div class="mx-auto max-w-6xl">
+          <slot />
+        </div>
+      </main>
+    </div>
+  </div>
+</Base>

@@ -1,0 +1,28 @@
+---
+/** Logotipo de texto, igual al del login de la app móvil. */
+interface Props {
+  tamano?: 'normal' | 'grande';
+  claro?: boolean;
+}
+const { tamano = 'normal', claro = false } = Astro.props;
+const grande = tamano === 'grande';
+---
+<div class:list={['flex items-center gap-3', grande && 'flex-col text-center']}>
+  <span
+    class:list={[
+      'grid place-items-center rounded-lg font-extrabold tracking-wide text-white',
+      claro ? 'bg-white/15' : 'bg-azul-700',
+      grande ? 'size-20 rounded-xl text-3xl' : 'size-10 text-base',
+    ]}
+  >
+    FPC
+  </span>
+  <span>
+    <span class:list={['block font-bold', claro ? 'text-white' : 'text-azul-800', grande ? 'text-xl' : 'text-base']}>
+      FPC Servicios
+    </span>
+    <span class:list={['block text-xs', claro ? 'text-azul-100' : 'text-gris-500']}>
+      {grande ? 'Distribución de Gases Industriales' : 'Administración'}
+    </span>
+  </span>
+</div>
