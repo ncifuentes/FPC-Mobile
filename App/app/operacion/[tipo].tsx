@@ -381,20 +381,27 @@ export default function PantallaOperacion() {
                 {resultados.length === 0 ? (
                   <Vacio texto="Sin coincidencias." />
                 ) : (
-                  resultados.slice(0, 8).map((c) => (
-                    <Fila
-                      key={c.id}
-                      icono="business-outline"
-                      titulo={c.nombre}
-                      subtitulo={`RUT: ${c.rut}`}
-                      onPress={() => {
-                        setCliente(c);
-                        setListaAbierta(false);
-                        setBusqueda('');
-                        setError(null);
-                      }}
-                    />
-                  ))
+                  <ScrollView
+                    style={estilos.listaClientes}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator
+                  >
+                    {resultados.map((c) => (
+                      <Fila
+                        key={c.id}
+                        icono="business-outline"
+                        titulo={c.nombre}
+                        subtitulo={`RUT: ${c.rut}`}
+                        onPress={() => {
+                          setCliente(c);
+                          setListaAbierta(false);
+                          setBusqueda('');
+                          setError(null);
+                        }}
+                      />
+                    ))}
+                  </ScrollView>
                 )}
               </Tarjeta>
             ) : null}
@@ -526,6 +533,7 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
 }
 
 const estilos = StyleSheet.create({
+  listaClientes: { maxHeight: 340 },
   contenido: { padding: espacios.lg, gap: espacios.lg, paddingBottom: espacios.xxl },
   filaEntreLados: {
     flexDirection: 'row',
