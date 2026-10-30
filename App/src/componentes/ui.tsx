@@ -35,7 +35,7 @@ export function Tarjeta({
 
 /* -------------------------------------------------------------------- Botón */
 
-type VarianteBoton = 'primario' | 'exito' | 'secundario' | 'fantasma';
+type VarianteBoton = 'primario' | 'exito' | 'secundario' | 'fantasma' | 'peligro';
 
 export function Boton({
   titulo,
@@ -60,12 +60,15 @@ export function Boton({
     exito: colores.verde[500],
     secundario: colores.gris[0],
     fantasma: 'transparent',
+    // Acciones que sacan al usuario de algo (cerrar sesión): fondo rojo claro.
+    peligro: colores.errorFondo,
   };
   const textoColor: Record<VarianteBoton, string> = {
     primario: colores.gris[0],
     exito: colores.gris[0],
     secundario: colores.azul[700],
     fantasma: colores.gris[500],
+    peligro: colores.error,
   };
 
   return (
@@ -78,6 +81,7 @@ export function Boton({
         estilos.boton,
         { backgroundColor: fondo[variante] },
         variante === 'secundario' && estilos.botonBorde,
+        variante === 'peligro' && estilos.botonPeligro,
         pressed && !inactivo && estilos.botonPresionado,
         inactivo && estilos.botonInactivo,
         style,
@@ -312,6 +316,7 @@ const estilos = StyleSheet.create({
     paddingHorizontal: espacios.lg,
   },
   botonBorde: { borderWidth: 1, borderColor: colores.gris[200] },
+  botonPeligro: { borderWidth: 1, borderColor: colores.error },
   botonPresionado: { opacity: 0.85 },
   botonInactivo: { opacity: 0.5 },
   botonTexto: { fontSize: 15, fontWeight: '600' },

@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Boton, Campo, Nota } from '../src/componentes/ui';
 import { cancelarCaptura, entregarCodigo } from '../src/estado/capturaCodigo';
@@ -35,7 +36,9 @@ const FORMATOS = [
 
 export default function Escaner() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [permiso, pedirPermiso] = useCameraPermissions();
+  const [aviso, setAviso] = useState<string | null>(null);
   const [manual, setManual] = useState(false);
   const [codigoManual, setCodigoManual] = useState('');
   const [linterna, setLinterna] = useState(false);
@@ -60,6 +63,27 @@ export default function Escaner() {
     },
     [router],
   );
+
+  // Salida siempre disponible: en el navegador el modal no trae botón de volver.
+  function cancelar() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
+  }
+
+  async function permitirCamara() {
+    setAviso(null);
+    try {
+      const respuesta = await pedirPermiso();
+      if (respuesta?.granted) return;
+      setAviso(
+        Platform.OS === 'web'
+          ? 'La cámara no está disponible en el navegador (necesita conexión segura). Usa el ingreso manual o prueba desde la app instalada en el teléfono.'
+          : 'No se otorgó el permiso de cámara. Puedes activarlo en Ajustes o ingresar el código a mano.',
+      );
+    } catch {
+      setAviso('No se pudo activar la cámara en este dispositivo. Usa el ingreso manual.');
+    }
+  }
 
   function alEscanear(resultado: BarcodeScanningResult) {
     capturar(resultado.data, 'escaner');
@@ -102,6 +126,7 @@ export default function Escaner() {
             variante="secundario"
             onPress={() => setManual(false)}
           />
+          <Boton titulo="Cancelar" variante="fantasma" onPress={cancelar} />
         </View>
       </KeyboardAvoidingView>
     );
@@ -121,13 +146,15 @@ export default function Escaner() {
           <Text style={estilos.manualTitulo}>Permiso de cámara</Text>
         </View>
         <Nota texto="FPC Mobile necesita la cámara para leer el código de barras del cilindro. Si prefieres no darlo, puedes escribir el código a mano." />
-        <Boton titulo="Permitir cámara" icono="camera-outline" onPress={() => void pedirPermiso()} />
+        {aviso ? <Nota tono="alerta" texto={aviso} /> : null}
+        <Boton titulo="Permitir cámara" icono="camera-outline" onPress={() => void permitirCamara()} />
         <Boton
           titulo="Ingresar código manualmente"
           icono="keypad-outline"
           variante="secundario"
           onPress={() => setManual(true)}
         />
+        <Boton titulo="Cancelar" variante="fantasma" onPress={cancelar} />
       </View>
     );
   }
@@ -143,6 +170,16 @@ export default function Escaner() {
         barcodeScannerSettings={{ barcodeTypes: [...FORMATOS] }}
         onBarcodeScanned={alEscanear}
       />
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Volver"
+        onPress={cancelar}
+        hitSlop={8}
+        style={[estilos.volver, { top: insets.top + espacios.md }]}
+      >
+        <Ionicons name="arrow-back" size={22} color={colores.gris[0]} />
+      </Pressable>
 
       <View style={estilos.marco}>
         <View style={estilos.recuadro} />
@@ -185,6 +222,17 @@ const estilos = StyleSheet.create({
   manual: { padding: espacios.xl, gap: espacios.lg, justifyContent: 'center', flex: 1 },
   manualEncabezado: { flexDirection: 'row', alignItems: 'center', gap: espacios.md },
   manualTitulo: { fontSize: 18, fontWeight: '700', color: colores.gris[900] },
+  volver: {
+    position: 'absolute',
+    left: espacios.lg,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: radios.full,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   marco: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: espacios.xl },
   recuadro: {
     width: '72%',

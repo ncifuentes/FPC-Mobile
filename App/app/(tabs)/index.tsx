@@ -1,7 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSesion } from '../../src/estado/sesion';
@@ -47,6 +46,13 @@ const OPCIONES: Opcion[] = [
 ];
 
 /**
+ * Disposición de los accesos: 'grilla' (2 x 2, como en Mockup1) o 'lista'
+ * (una tarjeta por fila, como en Mockup2). Es solo una constante de
+ * presentación: para comparar basta cambiarla y recargar.
+ */
+const DISPOSICION: 'grilla' | 'lista' = 'grilla';
+
+/**
  * Pantalla de inicio: accesos a las tres operaciones y vehículo de la jornada.
  *
  * La tarjeta de estado de sincronización —conectado, movimientos en espera,
@@ -59,12 +65,7 @@ export default function Inicio() {
   const primerNombre = usuario?.nombre.split(' ')[0] ?? '';
 
   return (
-    <SafeAreaView style={estilos.pantalla} edges={['top']}>
-      <View style={estilos.barra}>
-        <Text style={estilos.barraMarca}>FPC SERVICIOS</Text>
-        <Ionicons name="person-circle-outline" size={26} color={colores.gris[0]} />
-      </View>
-
+    <View style={estilos.pantalla}>
       <ScrollView contentContainerStyle={estilos.contenido}>
         <View>
           <Text style={estilos.saludo}>Hola, {primerNombre}</Text>
@@ -86,63 +87,95 @@ export default function Inicio() {
           </View>
         ) : null}
 
-        <View style={{ gap: espacios.md }}>
-          {OPCIONES.map((op) => (
-            <Pressable
-              key={op.titulo}
-              accessibilityRole="button"
-              onPress={() => router.push(op.ruta as never)}
-              style={({ pressed }) => [
-                estilos.opcion,
-                {
-                  backgroundColor: op.tono === 'verde' ? colores.verde[50] : colores.azul[50],
-                  borderColor: op.tono === 'verde' ? colores.verde[100] : colores.azul[100],
-                },
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <View
-                style={[
-                  estilos.opcionIcono,
+        {DISPOSICION === 'grilla' ? (
+          <View style={{ gap: espacios.md }}>
+            {[OPCIONES.slice(0, 2), OPCIONES.slice(2, 4)].map((fila, i) => (
+              <View key={i} style={estilos.filaGrilla}>
+                {fila.map((op) => (
+                  <Pressable
+                    key={op.titulo}
+                    accessibilityRole="button"
+                    onPress={() => router.push(op.ruta as never)}
+                    style={({ pressed }) => [
+                      estilos.celda,
+                      {
+                        backgroundColor: op.tono === 'verde' ? colores.verde[50] : colores.azul[50],
+                        borderColor: op.tono === 'verde' ? colores.verde[100] : colores.azul[100],
+                      },
+                      pressed && { opacity: 0.85 },
+                    ]}
+                  >
+                    <View style={estilos.celdaCabecera}>
+                      <View
+                        style={[
+                          estilos.opcionIcono,
+                          {
+                            backgroundColor:
+                              op.tono === 'verde' ? colores.verde[500] : colores.azul[600],
+                          },
+                        ]}
+                      >
+                        <Ionicons name={op.icono} size={22} color={colores.gris[0]} />
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colores.gris[400]} />
+                    </View>
+                    <View>
+                      <Text style={estilos.opcionTitulo}>{op.titulo}</Text>
+                      <Text style={estilos.opcionTexto} numberOfLines={3}>
+                        {op.descripcion}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={{ gap: espacios.md }}>
+            {OPCIONES.map((op) => (
+              <Pressable
+                key={op.titulo}
+                accessibilityRole="button"
+                onPress={() => router.push(op.ruta as never)}
+                style={({ pressed }) => [
+                  estilos.opcion,
                   {
-                    backgroundColor:
-                      op.tono === 'verde' ? colores.verde[500] : colores.azul[600],
+                    backgroundColor: op.tono === 'verde' ? colores.verde[50] : colores.azul[50],
+                    borderColor: op.tono === 'verde' ? colores.verde[100] : colores.azul[100],
                   },
+                  pressed && { opacity: 0.85 },
                 ]}
               >
-                <Ionicons name={op.icono} size={22} color={colores.gris[0]} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={estilos.opcionTitulo}>{op.titulo}</Text>
-                <Text style={estilos.opcionTexto}>{op.descripcion}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colores.gris[400]} />
-            </Pressable>
-          ))}
-        </View>
+                <View
+                  style={[
+                    estilos.opcionIcono,
+                    {
+                      backgroundColor:
+                        op.tono === 'verde' ? colores.verde[500] : colores.azul[600],
+                    },
+                  ]}
+                >
+                  <Ionicons name={op.icono} size={22} color={colores.gris[0]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={estilos.opcionTitulo}>{op.titulo}</Text>
+                  <Text style={estilos.opcionTexto}>{op.descripcion}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colores.gris[400]} />
+              </Pressable>
+            ))}
+          </View>
+        )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  pantalla: { flex: 1, backgroundColor: colores.azul[700] },
-  barra: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: espacios.lg,
-    paddingBottom: espacios.md,
-    backgroundColor: colores.azul[700],
-  },
-  barraMarca: { color: colores.gris[0], fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  pantalla: { flex: 1, backgroundColor: colores.gris[50] },
   contenido: {
     padding: espacios.lg,
     gap: espacios.lg,
-    backgroundColor: colores.gris[50],
-    borderTopLeftRadius: radios.xl,
-    borderTopRightRadius: radios.xl,
-    minHeight: '100%',
   },
   saludo: { fontSize: 24, fontWeight: '700', color: colores.gris[900] },
   subtitulo: { fontSize: 14, color: colores.gris[500], marginTop: 2 },
@@ -164,6 +197,17 @@ const estilos = StyleSheet.create({
     borderRadius: radios.lg,
     borderWidth: 1,
   },
+  filaGrilla: { flexDirection: 'row', gap: espacios.md },
+  celda: {
+    flex: 1,
+    minHeight: 150,
+    justifyContent: 'space-between',
+    gap: espacios.md,
+    padding: espacios.lg,
+    borderRadius: radios.lg,
+    borderWidth: 1,
+  },
+  celdaCabecera: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   opcionIcono: {
     width: 44,
     height: 44,
