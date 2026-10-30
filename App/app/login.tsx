@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -13,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Boton, Campo } from '../src/componentes/ui';
 import { useSesion } from '../src/estado/sesion';
-import { colores, espacios, radios } from '../src/theme/tokens';
+import { colores, espacios } from '../src/theme/tokens';
 
 export default function Login() {
   const router = useRouter();
@@ -44,10 +45,12 @@ export default function Login() {
       >
         <ScrollView contentContainerStyle={estilos.contenido} keyboardShouldPersistTaps="handled">
           <View style={estilos.marca}>
-            <View style={estilos.logo}>
-              <Text style={estilos.logoTexto}>FPC</Text>
-            </View>
-            <Text style={estilos.marcaTitulo}>FPC Servicios</Text>
+            <Image
+              source={require('../assets/logo-fpc-horizontal.png')}
+              style={estilos.logo}
+              resizeMode="contain"
+              accessibilityLabel="FPC Servicios"
+            />
             <Text style={estilos.marcaSubtitulo}>Distribución de Gases Industriales</Text>
           </View>
 
@@ -97,16 +100,8 @@ const estilos = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.gris[0] },
   contenido: { flexGrow: 1, padding: espacios.xl, justifyContent: 'space-between' },
   marca: { alignItems: 'center', gap: espacios.sm, paddingTop: espacios.xxl },
-  logo: {
-    width: 88,
-    height: 88,
-    borderRadius: radios.xl,
-    backgroundColor: colores.azul[700],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoTexto: { color: colores.gris[0], fontSize: 30, fontWeight: '800', letterSpacing: 1 },
-  marcaTitulo: { fontSize: 20, fontWeight: '700', color: colores.azul[800] },
+  // Proporción del archivo (1274 x 599): ancho fijo, alto calculado.
+  logo: { width: 240, height: 113 },
   marcaSubtitulo: { fontSize: 13, color: colores.gris[500] },
   formulario: { gap: espacios.md, paddingVertical: espacios.xxl },
   titulo: { fontSize: 24, fontWeight: '700', color: colores.gris[900] },
