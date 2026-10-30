@@ -12,6 +12,7 @@ import {
   type Cilindro,
   type Cliente,
   type MovimientoDetallado,
+  type Sucursal,
 } from '../../src/dominio/tipos';
 import { colores, espacios, radios } from '../../src/theme/tokens';
 
@@ -33,6 +34,7 @@ export default function DetalleCilindro() {
   const { codigo } = useLocalSearchParams<{ codigo: string }>();
   const [cilindro, setCilindro] = useState<Cilindro | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [sucursal, setSucursal] = useState<Sucursal | null>(null);
   const [movimientos, setMovimientos] = useState<MovimientoDetallado[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -43,12 +45,15 @@ export default function DetalleCilindro() {
       if (!vivo) return;
       setCilindro(c);
       if (c) {
-        const [movs, cli] = await Promise.all([
+        const [movs, suc] = await Promise.all([
           repos.movimientos.listarPorCilindro(c.id),
-          c.clienteActualId ? repos.clientes.obtener(c.clienteActualId) : Promise.resolve(null),
+          c.sucursalActualId ? repos.sucursales.obtener(c.sucursalActualId) : Promise.resolve(null),
         ]);
         if (!vivo) return;
         setMovimientos(movs);
+        setSucursal(suc);
+        const cli = suc ? await repos.clientes.obtener(suc.clienteId) : null;
+        if (!vivo) return;
         setCliente(cli);
       }
       setCargando(false);
@@ -97,7 +102,7 @@ export default function DetalleCilindro() {
           </View>
 
           <View style={estilos.datos}>
-            <Dato etiqueta="Tipo de gas" valor={cilindro.tipoGas} />
+            <Dato etiqueta="Tipo de gas" valor={cilindro.tipoGas ?? 'No especificado'} />
             <Dato etiqueta="Capacidad" valor={formatearCapacidad(cilindro)} />
             <Dato
               etiqueta="Tipo de envase"
@@ -111,9 +116,10 @@ export default function DetalleCilindro() {
             />
             <Dato
               etiqueta="Código de fábrica"
-              valor={cilindro.sinCodigoFabrica ? 'No (ingreso manual)' : 'Sí'}
+              valor={cilindro.codigoGenerado ? 'No (ingreso manual)' : 'Sí'}
             />
             {cliente ? <Dato etiqueta="Cliente actual" valor={cliente.nombre} /> : null}
+            {sucursal ? <Dato etiqueta="Sucursal actual" valor={sucursal.nombre} /> : null}
             {cilindro.enClienteDesde ? (
               <Dato
                 etiqueta="En cliente desde"
@@ -185,7 +191,10 @@ export default function DetalleCilindro() {
                       </View>
                       <Text style={estilos.tenue}>{fechaHora(m.fechaEvento)}</Text>
                       {m.nombreCliente ? (
-                        <Text style={estilos.tenue}>Cliente: {m.nombreCliente}</Text>
+                        <Text style={estilos.tenue}>
+                          Cliente: {m.nombreCliente}
+                          {m.nombreSucursal ? ` · ${m.nombreSucursal}` : ''}
+                        </Text>
                       ) : null}
                       <Text style={estilos.tenue}>Registró: {m.nombreUsuario}</Text>
                     </View>

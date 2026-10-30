@@ -1,13 +1,15 @@
 /**
  * Tipos del dominio de FPC Mobile.
  *
- * Reflejan el esquema acordado en Arquitectura_Tecnica_FPC_Mobile.md:
- * `clientes`, `cilindros`, `movimientos`, `usuarios`, `camiones`.
+ * Reflejan el esquema real de Supabase (siete tablas: `clientes`, `sucursales`,
+ * `productos`, `cilindros`, `movimientos`, `usuarios`, `camiones`), no el modelo
+ * de cinco tablas con el que arrancó el proyecto. El cliente no tiene dirección
+ * ni rubro propios: eso vive en sus sucursales. El cilindro no apunta a un
+ * cliente: apunta a una sucursal (`sucursal_actual_id`), y el tipo de gas, la
+ * capacidad y el tipo de envase vienen de `productos` por `producto_id`.
  *
- * Cuando se conecte Supabase, estos tipos se reemplazan (o se validan contra)
- * los tipos generados con `supabase gen types typescript`. Las pantallas no
- * deberían cambiar: hablan con los repositorios de `src/dominio/repositorios.ts`,
- * no con la base de datos.
+ * Las pantallas no deberían cambiar más que lo necesario: hablan con los
+ * repositorios de `src/dominio/repositorios.ts`, no con la base de datos.
  */
 
 export type Uuid = string;
@@ -60,32 +62,52 @@ export interface Cliente {
   id: Uuid;
   /** Único y normalizado. No es la clave primaria: el RUT genérico 55.555.555-5 existe. */
   rut: string;
+  /** Código de cliente en KAME ONE. No todos lo traen: puede ser null. */
+  codigoKame: string | null;
   nombre: string;
-  direccion: string | null;
+  activo: boolean;
+}
+
+/**
+ * Dirección de despacho de un cliente. Un cliente tiene una o más; el técnico
+ * elige primero el cliente y, si tiene más de una sucursal activa, cuál.
+ */
+export interface Sucursal {
+  id: Uuid;
+  clienteId: Uuid;
+  nombre: string;
+  direccion: string;
+  comuna: string | null;
+  ciudad: string | null;
+  region: string | null;
+  contacto: string | null;
   telefono: string | null;
   email: string | null;
-  /** No viene en el export de KAME ONE: hay que levantarlo. */
-  region: string | null;
-  /** No viene en el export de KAME ONE: hay que levantarlo. */
-  rubro: string | null;
+  esPrincipal: boolean;
   activo: boolean;
 }
 
 export interface Cilindro {
   id: Uuid;
-  /** Código de barras lineal de fábrica, o código asignado a mano si no lo trae. */
+  /** Código de barras de fábrica si lo trae; si no, el número de serie. Para mostrar y buscar. */
   codigo: string;
+  numeroSerie: string;
+  codigoBarras: string | null;
   tipoEnvase: TipoEnvase;
-  /** Tipo de gas rotulado de fábrica. */
-  tipoGas: string;
-  capacidadValor: number;
-  capacidadUnidad: UnidadCapacidad;
+  /** Tipo de gas rotulado de fábrica. Algunos productos del catálogo no lo traen. */
+  tipoGas: string | null;
+  /**
+   * Null solo en el código PRO (propiedad del cliente): KAME no guarda
+   * capacidad de envases que no son de FPC.
+   */
+  capacidadValor: number | null;
+  capacidadUnidad: UnidadCapacidad | null;
   estado: EstadoCilindro;
-  clienteActualId: Uuid | null;
+  sucursalActualId: Uuid | null;
   /** Base del cálculo de arriendo: se cobra por día desde la entrega hasta el retiro. */
   enClienteDesde: FechaIso | null;
   /** true si el cilindro se dio de alta sin código de barras de fábrica. */
-  sinCodigoFabrica: boolean;
+  codigoGenerado: boolean;
 }
 
 export interface Movimiento {
@@ -94,7 +116,7 @@ export interface Movimiento {
   tipo: TipoMovimiento;
   cilindroId: Uuid;
   /** null en los movimientos de tipo "carga". */
-  clienteId: Uuid | null;
+  sucursalId: Uuid | null;
   usuarioId: Uuid;
   camionId: Uuid;
   /** Cuándo ocurrió en terreno. */
@@ -108,6 +130,7 @@ export interface Movimiento {
 export interface MovimientoDetallado extends Movimiento {
   codigoCilindro: string;
   nombreCliente: string | null;
+  nombreSucursal: string | null;
   nombreUsuario: string;
 }
 
@@ -124,5 +147,6 @@ export const ETIQUETA_ESTADO: Record<EstadoCilindro, string> = {
 };
 
 export function formatearCapacidad(c: Pick<Cilindro, 'capacidadValor' | 'capacidadUnidad'>): string {
+  if (c.capacidadValor == null || c.capacidadUnidad == null) return 'Propiedad del cliente';
   return c.capacidadUnidad === 'm3' ? `${c.capacidadValor} m³` : `${c.capacidadValor} kg`;
 }

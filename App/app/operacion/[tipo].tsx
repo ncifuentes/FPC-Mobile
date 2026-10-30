@@ -15,6 +15,7 @@ import {
   type Cliente,
   type Movimiento,
   type MovimientoDetallado,
+  type Sucursal,
   type TipoMovimiento,
 } from '../../src/dominio/tipos';
 import { colores, espacios, radios } from '../../src/theme/tokens';
@@ -79,6 +80,10 @@ export default function PantallaOperacion() {
   const [resultados, setResultados] = useState<Cliente[]>([]);
   const [listaAbierta, setListaAbierta] = useState(false);
 
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [sucursal, setSucursal] = useState<Sucursal | null>(null);
+  const [cargandoSucursales, setCargandoSucursales] = useState(false);
+
   const [registros, setRegistros] = useState<MovimientoDetallado[]>([]);
   const [ultimo, setUltimo] = useState<{ movimiento: MovimientoDetallado; cilindro: Cilindro } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +109,32 @@ export default function PantallaOperacion() {
       vivo = false;
     };
   }, [busqueda, necesitaCliente]);
+
+  // Al elegir cliente se cargan sus sucursales activas: con una sola, se
+  // selecciona sola; con más de una, el técnico elige cuál.
+  useEffect(() => {
+    if (!cliente) {
+      setSucursales([]);
+      setSucursal(null);
+      return;
+    }
+    let vivo = true;
+    setSucursal(null);
+    setCargandoSucursales(true);
+    void repos.sucursales
+      .listarPorCliente(cliente.id)
+      .then((lista) => {
+        if (!vivo) return;
+        setSucursales(lista);
+        if (lista.length === 1) setSucursal(lista[0]);
+      })
+      .finally(() => {
+        if (vivo) setCargandoSucursales(false);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [cliente]);
 
   const cargadosHoy = useMemo(
     () => (tipo === 'carga' ? registros.length : 0),
@@ -140,8 +171,8 @@ export default function PantallaOperacion() {
     if (cilindro.estado !== 'en_cliente') {
       return `${cilindro.codigo} no figura en poder de ningún cliente.`;
     }
-    if (cliente && cilindro.clienteActualId !== cliente.id) {
-      return `${cilindro.codigo} figura en poder de otro cliente. Verifica antes de retirarlo.`;
+    if (sucursal && cilindro.sucursalActualId !== sucursal.id) {
+      return `${cilindro.codigo} figura en poder de otra sucursal. Verifica antes de retirarlo.`;
     }
     return null;
   }
@@ -149,8 +180,8 @@ export default function PantallaOperacion() {
   async function capturarYRegistrar() {
     setError(null);
 
-    if (necesitaCliente && !cliente) {
-      setError('Selecciona primero el cliente.');
+    if (necesitaCliente && !(cliente && sucursal)) {
+      setError('Selecciona primero el cliente y la sucursal.');
       return;
     }
     if (!usuario || !camion) {
@@ -189,7 +220,7 @@ export default function PantallaOperacion() {
         uuidLocal: Crypto.randomUUID(),
         tipo,
         cilindroId: cilindro.id,
-        clienteId: necesitaCliente ? (cliente?.id ?? null) : null,
+        sucursalId: necesitaCliente ? (sucursal?.id ?? null) : null,
         usuarioId: usuario.id,
         camionId: camion.id,
         fechaEvento: new Date().toISOString(),
@@ -209,6 +240,7 @@ export default function PantallaOperacion() {
           ...movimiento,
           codigoCilindro: cilindro.codigo,
           nombreCliente: cliente?.nombre ?? null,
+          nombreSucursal: sucursal?.nombre ?? null,
           nombreUsuario: usuario.nombre,
         },
       });
@@ -243,10 +275,13 @@ export default function PantallaOperacion() {
             </View>
 
             <View style={estilos.datos}>
-              <Dato etiqueta="Tipo de gas" valor={ultimo.cilindro.tipoGas} />
+              <Dato etiqueta="Tipo de gas" valor={ultimo.cilindro.tipoGas ?? 'No especificado'} />
               <Dato etiqueta="Capacidad" valor={formatearCapacidad(ultimo.cilindro)} />
               {ultimo.movimiento.nombreCliente ? (
                 <Dato etiqueta="Cliente" valor={ultimo.movimiento.nombreCliente} />
+              ) : null}
+              {ultimo.movimiento.nombreSucursal ? (
+                <Dato etiqueta="Sucursal" valor={ultimo.movimiento.nombreSucursal} />
               ) : null}
               <Dato etiqueta="Fecha / Hora" valor={fechaHora(ultimo.movimiento.fechaEvento)} />
               <Dato etiqueta="Usuario" valor={ultimo.movimiento.nombreUsuario} />
@@ -281,7 +316,7 @@ export default function PantallaOperacion() {
                 <Fila
                   key={m.uuidLocal}
                   titulo={m.codigoCilindro}
-                  subtitulo={m.nombreCliente ?? undefined}
+                  subtitulo={m.nombreSucursal ?? m.nombreCliente ?? undefined}
                   derecha={hora(m.fechaEvento)}
                 />
               ))
@@ -373,9 +408,57 @@ export default function PantallaOperacion() {
                     <Text style={estilos.etiquetaTenue}>RUT: {cliente.rut}</Text>
                   </View>
                 </View>
-                <Pressable onPress={() => setCliente(null)} hitSlop={8}>
+                <Pressable
+                  onPress={() => {
+                    setCliente(null);
+                    setSucursal(null);
+                  }}
+                  hitSlop={8}
+                >
                   <Ionicons name="close-circle-outline" size={20} color={colores.gris[400]} />
                 </Pressable>
+              </Tarjeta>
+            ) : null}
+
+            {cliente && cargandoSucursales ? (
+              <Nota texto="Cargando sucursales del cliente…" />
+            ) : null}
+
+            {cliente && !cargandoSucursales && sucursales.length === 0 ? (
+              <Nota tono="alerta" texto="Este cliente no tiene sucursales activas registradas." />
+            ) : null}
+
+            {cliente && sucursales.length > 1 && !sucursal ? (
+              <View style={{ gap: espacios.sm }}>
+                <Seccion texto="Selecciona sucursal" style={{ marginBottom: 0 }} />
+                <Tarjeta style={{ paddingVertical: espacios.sm }}>
+                  {sucursales.map((s) => (
+                    <Fila
+                      key={s.id}
+                      icono="location-outline"
+                      titulo={s.nombre}
+                      subtitulo={s.direccion}
+                      onPress={() => setSucursal(s)}
+                    />
+                  ))}
+                </Tarjeta>
+              </View>
+            ) : null}
+
+            {sucursal ? (
+              <Tarjeta style={estilos.filaEntreLados}>
+                <View style={estilos.codigoFila}>
+                  <Ionicons name="location-outline" size={24} color={colores.azul[600]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={estilos.valorFuerte}>{sucursal.nombre}</Text>
+                    <Text style={estilos.etiquetaTenue}>{sucursal.direccion}</Text>
+                  </View>
+                </View>
+                {sucursales.length > 1 ? (
+                  <Pressable onPress={() => setSucursal(null)} hitSlop={8}>
+                    <Ionicons name="close-circle-outline" size={20} color={colores.gris[400]} />
+                  </Pressable>
+                ) : null}
               </Tarjeta>
             ) : null}
           </View>
@@ -401,7 +484,7 @@ export default function PantallaOperacion() {
           icono="scan-outline"
           onPress={() => void capturarYRegistrar()}
           cargando={ocupado}
-          deshabilitado={necesitaCliente && !cliente}
+          deshabilitado={necesitaCliente && !(cliente && sucursal)}
         />
 
         <Seccion texto="Registros del día" style={{ marginBottom: 0 }} />
@@ -413,7 +496,7 @@ export default function PantallaOperacion() {
               <Fila
                 key={m.uuidLocal}
                 titulo={m.codigoCilindro}
-                subtitulo={m.nombreCliente ?? undefined}
+                subtitulo={m.nombreSucursal ?? m.nombreCliente ?? undefined}
                 derecha={hora(m.fechaEvento)}
               />
             ))
