@@ -13,6 +13,7 @@ import type {
   Cliente,
   Movimiento,
   MovimientoDetallado,
+  Sucursal,
   Usuario,
   Uuid,
 } from './tipos';
@@ -24,14 +25,21 @@ export interface RepositorioAutenticacion {
 }
 
 export interface RepositorioClientes {
-  /** Catálogo completo. Con 120 clientes activos la descarga de jornada es menor. */
+  /** Catálogo completo. Con ~180 clientes activos la descarga de jornada es menor. */
   listar(): Promise<Cliente[]>;
   buscar(texto: string): Promise<Cliente[]>;
   obtener(id: Uuid): Promise<Cliente | null>;
 }
 
+export interface RepositorioSucursales {
+  /** Direcciones de despacho activas de un cliente. El técnico elige entre ellas si hay más de una. */
+  listarPorCliente(clienteId: Uuid): Promise<Sucursal[]>;
+  obtener(id: Uuid): Promise<Sucursal | null>;
+}
+
 export interface RepositorioCilindros {
   obtenerPorCodigo(codigo: string): Promise<Cilindro | null>;
+  obtener(id: Uuid): Promise<Cilindro | null>;
   listarPorEstado(estado: Cilindro['estado']): Promise<Cilindro[]>;
   /** Cilindros cargados hoy en un vehículo: es el universo entregable. */
   listarEnCamion(camionId: Uuid): Promise<Cilindro[]>;
@@ -62,6 +70,7 @@ export interface RepositorioMovimientos {
 export interface Repositorios {
   auth: RepositorioAutenticacion;
   clientes: RepositorioClientes;
+  sucursales: RepositorioSucursales;
   cilindros: RepositorioCilindros;
   camiones: RepositorioCamiones;
   movimientos: RepositorioMovimientos;

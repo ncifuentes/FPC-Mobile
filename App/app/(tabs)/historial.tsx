@@ -42,7 +42,7 @@ export default function Historial() {
               <Fila
                 key={c.id}
                 titulo={c.codigo}
-                subtitulo={`${c.tipoGas} · ${formatearCapacidad(c)} · ${ETIQUETA_ESTADO[c.estado]}`}
+                subtitulo={`${c.tipoGas ?? 'Gas no especificado'} · ${formatearCapacidad(c)} · ${ETIQUETA_ESTADO[c.estado]}`}
                 onPress={() =>
                   router.push({ pathname: '/cilindro/[codigo]', params: { codigo: c.codigo } })
                 }

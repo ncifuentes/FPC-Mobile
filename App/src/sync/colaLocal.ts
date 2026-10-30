@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS movimientos_pendientes (
   uuid_local    TEXT PRIMARY KEY NOT NULL,
   tipo          TEXT NOT NULL,
   cilindro_id   TEXT NOT NULL,
-  cliente_id    TEXT,
+  sucursal_id   TEXT,
   usuario_id    TEXT NOT NULL,
   camion_id     TEXT NOT NULL,
   fecha_evento  TEXT NOT NULL,
@@ -41,7 +41,7 @@ type FilaPendiente = {
   uuid_local: string;
   tipo: string;
   cilindro_id: string;
-  cliente_id: string | null;
+  sucursal_id: string | null;
   usuario_id: string;
   camion_id: string;
   fecha_evento: string;
@@ -53,7 +53,7 @@ function aMovimiento(f: FilaPendiente): Movimiento {
     uuidLocal: f.uuid_local,
     tipo: f.tipo as Movimiento['tipo'],
     cilindroId: f.cilindro_id,
-    clienteId: f.cliente_id,
+    sucursalId: f.sucursal_id,
     usuarioId: f.usuario_id,
     camionId: f.camion_id,
     fechaEvento: f.fecha_evento,
@@ -79,12 +79,12 @@ function crearColaSqlite(): ColaLocal {
       // OR IGNORE = misma idempotencia que `on conflict do nothing` en Postgres.
       await db.runAsync(
         `INSERT OR IGNORE INTO movimientos_pendientes
-           (uuid_local, tipo, cilindro_id, cliente_id, usuario_id, camion_id, fecha_evento, origen_codigo)
+           (uuid_local, tipo, cilindro_id, sucursal_id, usuario_id, camion_id, fecha_evento, origen_codigo)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         m.uuidLocal,
         m.tipo,
         m.cilindroId,
-        m.clienteId,
+        m.sucursalId,
         m.usuarioId,
         m.camionId,
         m.fechaEvento,
