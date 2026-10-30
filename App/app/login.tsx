@@ -16,6 +16,9 @@ import { Boton, Campo } from '../src/componentes/ui';
 import { useSesion } from '../src/estado/sesion';
 import { colores, espacios } from '../src/theme/tokens';
 
+// La imagen mide 1200 x 360; con ~390 pt de ancho de pantalla queda en ~117 pt.
+const ALTO_OLA = 120;
+
 export default function Login() {
   const router = useRouter();
   const { iniciarSesion } = useSesion();
@@ -38,7 +41,7 @@ export default function Login() {
   }
 
   return (
-    <SafeAreaView style={estilos.pantalla} edges={['top', 'bottom']}>
+    <SafeAreaView style={estilos.pantalla} edges={['top']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -92,13 +95,29 @@ export default function Login() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Ola con los colores de la empresa, pegada al borde inferior (Mockup1). */}
+      <View style={estilos.ola} pointerEvents="none">
+        <Image
+          source={require('../assets/login-ola.png')}
+          style={{ width: '100%', height: ALTO_OLA }}
+          resizeMode="stretch"
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
 const estilos = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.gris[0] },
-  contenido: { flexGrow: 1, padding: espacios.xl, justifyContent: 'space-between' },
+  // El pie de página queda sobre la ola: el padding inferior es el alto de la ola.
+  contenido: {
+    flexGrow: 1,
+    padding: espacios.xl,
+    paddingBottom: ALTO_OLA + espacios.md,
+    justifyContent: 'space-between',
+  },
+  ola: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   marca: { alignItems: 'center', gap: espacios.sm, paddingTop: espacios.xxl },
   // Proporción del archivo (1274 x 599): ancho fijo, alto calculado.
   logo: { width: 240, height: 113 },

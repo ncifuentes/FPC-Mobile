@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { EncabezadoMarca, iconoDeRuta } from '../src/componentes/EncabezadoMarca';
 import { ProveedorSesion } from '../src/estado/sesion';
 import { colores } from '../src/theme/tokens';
 
@@ -32,6 +33,31 @@ export default function LayoutRaiz() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Pantallas que se abren desde las pestañas: encabezado de marca con volver. */}
+            <Stack.Screen
+              name="operacion/[tipo]"
+              options={{
+                header: ({ options, route, back, navigation }) => (
+                  <EncabezadoMarca
+                    titulo={options.title}
+                    icono={iconoDeRuta(route.name, route.params)}
+                    onAtras={back ? navigation.goBack : undefined}
+                  />
+                ),
+              }}
+            />
+            <Stack.Screen
+              name="cilindro/[codigo]"
+              options={{
+                header: ({ options, route, back, navigation }) => (
+                  <EncabezadoMarca
+                    titulo={options.title}
+                    icono={iconoDeRuta(route.name, route.params)}
+                    onAtras={back ? navigation.goBack : undefined}
+                  />
+                ),
+              }}
+            />
             <Stack.Screen
               name="escaner"
               options={{ presentation: 'modal', title: 'Escanear cilindro' }}

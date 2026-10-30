@@ -60,7 +60,7 @@ export default function Perfil() {
       <Boton
         titulo="Cerrar sesión"
         icono="log-out-outline"
-        variante="secundario"
+        variante="peligro"
         onPress={async () => {
           await cerrarSesion();
           router.replace('/login');
