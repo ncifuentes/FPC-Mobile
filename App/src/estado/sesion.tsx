@@ -19,6 +19,7 @@ import React, {
 } from 'react';
 
 import { repos } from '../datos';
+import { guardarCamion, leerCamion } from '../datos/cacheSesion';
 import type { Camion, Usuario } from '../dominio/tipos';
 
 interface EstadoSesion {
@@ -41,30 +42,70 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let vivo = true;
     void (async () => {
-      const [sesion, camiones] = await Promise.all([
-        repos.auth.sesionActual(),
-        repos.camiones.listar(),
-      ]);
-      if (!vivo) return;
-      setCamionesDisponibles(camiones);
-      setUsuario(sesion);
-      if (sesion?.camionAsignadoId) {
-        setCamion(camiones.find((c) => c.id === sesion.camionAsignadoId) ?? null);
+      try {
+        // Primero la sesión: sin ella, `camiones` queda vacía por RLS y no
+        // tiene sentido ni sirve consultarla. Consultarla igual tumbaba la
+        // app antes de llegar al login.
+        const sesion = await repos.auth.sesionActual();
+        if (!vivo) return;
+        if (!sesion) {
+          setUsuario(null);
+          setCamion(null);
+          setCamionesDisponibles([]);
+          return;
+        }
+        setUsuario(sesion);
+        await cargarCamionDeSesion(sesion);
+      } catch {
+        // Cualquier falla acá (red, RLS, lo que sea) no puede tumbar la app
+        // antes de mostrar el login: se entra como si no hubiera sesión.
+        if (vivo) {
+          setUsuario(null);
+          setCamion(null);
+          setCamionesDisponibles([]);
+        }
+      } finally {
+        if (vivo) setCargando(false);
       }
-      setCargando(false);
     })();
     return () => {
       vivo = false;
     };
+
+    async function cargarCamionDeSesion(sesion: Usuario) {
+      try {
+        const camiones = await repos.camiones.listar();
+        if (!vivo) return;
+        setCamionesDisponibles(camiones);
+        const encontrado = camiones.find((c) => c.id === sesion.camionAsignadoId) ?? null;
+        setCamion(encontrado);
+        await guardarCamion(encontrado);
+      } catch {
+        // Sesión válida pero sin red para traer la lista: se usa el último
+        // camión conocido en vez de dejar al técnico sin vehículo.
+        const respaldo = await leerCamion();
+        if (!vivo) return;
+        setCamionesDisponibles(respaldo ? [respaldo] : []);
+        setCamion(respaldo);
+      }
+    }
   }, []);
 
   const iniciarSesion = useCallback(
     async (correo: string, clave: string) => {
       const sesion = await repos.auth.iniciarSesion(correo, clave);
-      const camiones = await repos.camiones.listar();
-      setCamionesDisponibles(camiones);
       setUsuario(sesion);
-      setCamion(camiones.find((c) => c.id === sesion.camionAsignadoId) ?? null);
+      try {
+        const camiones = await repos.camiones.listar();
+        setCamionesDisponibles(camiones);
+        const encontrado = camiones.find((c) => c.id === sesion.camionAsignadoId) ?? null;
+        setCamion(encontrado);
+        await guardarCamion(encontrado);
+      } catch {
+        const respaldo = await leerCamion();
+        setCamionesDisponibles(respaldo ? [respaldo] : []);
+        setCamion(respaldo);
+      }
     },
     [],
   );
@@ -73,6 +114,7 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
     await repos.auth.cerrarSesion();
     setUsuario(null);
     setCamion(null);
+    setCamionesDisponibles([]);
   }, []);
 
   const valor = useMemo<EstadoSesion>(
