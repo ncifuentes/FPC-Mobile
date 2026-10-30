@@ -4,6 +4,9 @@
  * Los permisos reales no viven acá: se resuelven una sola vez con Row Level
  * Security en Postgres (`tecnico` / `admin` / `gerente`). Este contexto solo
  * guarda quién entró y con qué vehículo, para estampar los movimientos.
+ *
+ * El camión lo asigna el administrador en `camion_jornada_id`; la app solo lo
+ * lee, por eso no existe ninguna función para cambiarlo desde el teléfono.
  */
 
 import React, {
@@ -23,9 +26,8 @@ interface EstadoSesion {
   camion: Camion | null;
   camionesDisponibles: Camion[];
   cargando: boolean;
-  iniciarSesion(usuario: string, clave: string): Promise<void>;
+  iniciarSesion(correo: string, clave: string): Promise<void>;
   cerrarSesion(): Promise<void>;
-  cambiarCamion(camionId: string): Promise<void>;
 }
 
 const Contexto = createContext<EstadoSesion | null>(null);
@@ -57,14 +59,12 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
   }, []);
 
   const iniciarSesion = useCallback(
-    async (nombreUsuario: string, clave: string) => {
-      const sesion = await repos.auth.iniciarSesion(nombreUsuario, clave);
+    async (correo: string, clave: string) => {
+      const sesion = await repos.auth.iniciarSesion(correo, clave);
       const camiones = await repos.camiones.listar();
       setCamionesDisponibles(camiones);
       setUsuario(sesion);
-      setCamion(
-        camiones.find((c) => c.id === sesion.camionAsignadoId) ?? camiones[0] ?? null,
-      );
+      setCamion(camiones.find((c) => c.id === sesion.camionAsignadoId) ?? null);
     },
     [],
   );
@@ -75,13 +75,6 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
     setCamion(null);
   }, []);
 
-  const cambiarCamion = useCallback(
-    async (camionId: string) => {
-      setCamion(camionesDisponibles.find((c) => c.id === camionId) ?? null);
-    },
-    [camionesDisponibles],
-  );
-
   const valor = useMemo<EstadoSesion>(
     () => ({
       usuario,
@@ -90,9 +83,8 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
       cargando,
       iniciarSesion,
       cerrarSesion,
-      cambiarCamion,
     }),
-    [usuario, camion, camionesDisponibles, cargando, iniciarSesion, cerrarSesion, cambiarCamion],
+    [usuario, camion, camionesDisponibles, cargando, iniciarSesion, cerrarSesion],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

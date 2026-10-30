@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Boton, Etiqueta, Fila, Nota, Seccion, Tarjeta } from '../../src/componentes/ui';
+import { Boton, Etiqueta, Fila, Nota, Seccion, Tarjeta, Vacio } from '../../src/componentes/ui';
 import { useSesion } from '../../src/estado/sesion';
 import { colores, espacios, radios } from '../../src/theme/tokens';
 
@@ -21,7 +21,7 @@ const NOMBRE_ROL = {
  */
 export default function Perfil() {
   const router = useRouter();
-  const { usuario, camion, camionesDisponibles, cambiarCamion, cerrarSesion } = useSesion();
+  const { usuario, camion, cerrarSesion } = useSesion();
 
   if (!usuario) return null;
 
@@ -43,15 +43,15 @@ export default function Perfil() {
       <View>
         <Seccion texto="Vehículo de la jornada" />
         <Tarjeta style={{ paddingVertical: espacios.sm }}>
-          {camionesDisponibles.map((c) => (
+          {camion ? (
             <Fila
-              key={c.id}
-              icono={c.id === camion?.id ? 'checkmark-circle' : 'bus-outline'}
-              titulo={`${c.descripcion} · ${c.patente}`}
-              subtitulo={`Capacidad: ${c.capacidadCilindros} cilindros`}
-              onPress={() => void cambiarCamion(c.id)}
+              icono="bus-outline"
+              titulo={`${camion.descripcion} · ${camion.patente}`}
+              subtitulo={`Capacidad: ${camion.capacidadCilindros} cilindros`}
             />
-          ))}
+          ) : (
+            <Vacio texto="Sin camión asignado. Pídele al administrador que te asigne uno." />
+          )}
         </Tarjeta>
       </View>
 

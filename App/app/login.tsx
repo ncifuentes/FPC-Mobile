@@ -18,7 +18,7 @@ import { colores, espacios, radios } from '../src/theme/tokens';
 export default function Login() {
   const router = useRouter();
   const { iniciarSesion } = useSesion();
-  const [usuario, setUsuario] = useState('bnunez');
+  const [correo, setCorreo] = useState('');
   const [clave, setClave] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -27,7 +27,7 @@ export default function Login() {
     setError(null);
     setCargando(true);
     try {
-      await iniciarSesion(usuario, clave);
+      await iniciarSesion(correo, clave);
       router.replace('/(tabs)');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo iniciar sesión.');
@@ -56,10 +56,12 @@ export default function Login() {
             <Text style={estilos.subtitulo}>Ingresa a tu cuenta para continuar</Text>
 
             <Campo
-              valor={usuario}
-              onChange={setUsuario}
-              placeholder="Usuario"
-              icono="person-outline"
+              valor={correo}
+              onChange={setCorreo}
+              placeholder="Correo"
+              icono="mail-outline"
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
             <Campo
               valor={clave}
