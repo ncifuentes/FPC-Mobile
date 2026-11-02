@@ -27,7 +27,9 @@ export default function LayoutTabs() {
         name="index"
         options={{
           title: 'Inicio',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={typeof color === 'string' ? color : undefined} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -35,7 +37,7 @@ export default function LayoutTabs() {
         options={{
           title: 'Historial',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size} color={color} />
+            <Ionicons name="time-outline" size={size} color={typeof color === 'string' ? color : undefined} />
           ),
         }}
       />
@@ -44,7 +46,7 @@ export default function LayoutTabs() {
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={typeof color === 'string' ? color : undefined} />
           ),
         }}
       />
