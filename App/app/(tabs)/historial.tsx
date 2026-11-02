@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Campo, Fila, Seccion, Tarjeta, Vacio } from '../../src/componentes/ui';
+import { Campo, Fila, Nota, Seccion, Tarjeta, Vacio } from '../../src/componentes/ui';
 import { repos } from '../../src/datos';
 import { ETIQUETA_ESTADO, formatearCapacidad, type Cilindro } from '../../src/dominio/tipos';
 import { espacios } from '../../src/theme/tokens';
@@ -11,12 +11,20 @@ export default function Historial() {
   const router = useRouter();
   const [busqueda, setBusqueda] = useState('');
   const [cilindros, setCilindros] = useState<Cilindro[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
-    void repos.cilindros.buscar(busqueda).then((r) => {
-      if (vivo) setCilindros(r);
-    });
+    void repos.cilindros
+      .buscar(busqueda)
+      .then((r) => {
+        if (!vivo) return;
+        setCilindros(r);
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if (vivo) setError(e instanceof Error && e.message ? e.message : 'No se pudo buscar cilindros.');
+      });
     return () => {
       vivo = false;
     };
@@ -31,6 +39,8 @@ export default function Historial() {
         icono="search-outline"
         autoCapitalize="characters"
       />
+
+      {error ? <Nota tono="alerta" texto={error} /> : null}
 
       <View>
         <Seccion texto="Cilindros" />

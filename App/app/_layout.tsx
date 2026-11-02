@@ -5,22 +5,32 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { EncabezadoMarca, iconoDeRuta } from '../src/componentes/EncabezadoMarca';
-import { ProveedorSesion } from '../src/estado/sesion';
+import { ProveedorSesion, useSesion } from '../src/estado/sesion';
+import { ProveedorSync } from '../src/sync/sincronizador';
 import { colores } from '../src/theme/tokens';
+
+/**
+ * La sincronización vive dentro de la sesión y solo trabaja con usuario
+ * autenticado. Se monta siempre (inactiva sin usuario) para no cambiar la forma
+ * del árbol al iniciar o cerrar sesión, que remontaría el Stack completo.
+ */
+function SyncDeSesion({ children }: { children: React.ReactNode }) {
+  const { usuario } = useSesion();
+  return <ProveedorSync usuarioId={usuario?.id ?? null}>{children}</ProveedorSync>;
+}
 
 /**
  * Stack raíz y proveedores globales.
  *
- * Monta la sesión y declara el escáner como modal. El proveedor de
- * sincronización todavía no entra: la cola local de pendientes y el envío por
- * lotes dependen del backend, que es trabajo posterior. Mientras tanto los
- * movimientos se registran contra el repositorio en memoria.
+ * Monta la sesión, la sincronización de movimientos y declara el escáner como
+ * modal.
  */
 export default function LayoutRaiz() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ProveedorSesion>
+          <SyncDeSesion>
           <StatusBar style="light" />
           <Stack
             screenOptions={{
@@ -63,6 +73,7 @@ export default function LayoutRaiz() {
               options={{ presentation: 'modal', title: 'Escanear cilindro' }}
             />
           </Stack>
+          </SyncDeSesion>
         </ProveedorSesion>
       </SafeAreaProvider>
     </GestureHandlerRootView>

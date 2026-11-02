@@ -126,12 +126,45 @@ export interface Movimiento {
   origenCodigo: OrigenCodigo;
 }
 
+/**
+ * Situación del movimiento respecto del servidor, vista desde el teléfono:
+ *  - `pendiente`: está en la cola local, todavía no llegó a Supabase;
+ *  - `enviado`: ya está en `public.movimientos` (aunque falte su folio);
+ *  - `rechazado`: el servidor lo rechazó por datos o permisos y no se reintenta solo.
+ */
+export type EnvioMovimiento = 'pendiente' | 'enviado' | 'rechazado';
+
 /** Movimiento acompañado de los datos que la interfaz necesita mostrar. */
 export interface MovimientoDetallado extends Movimiento {
   codigoCilindro: string;
   nombreCliente: string | null;
   nombreSucursal: string | null;
   nombreUsuario: string;
+  envio: EnvioMovimiento;
+  /** Motivo del rechazo del servidor; null si no fue rechazado. */
+  errorEnvio: string | null;
+}
+
+/**
+ * Lo que la pantalla entrega al registrar. Además del movimiento trae:
+ *  - `despachoId`: agrupa los movimientos de una misma visita a una sucursal
+ *    (una pantalla de entrega o retiro). Al sincronizar se pide UN folio por
+ *    despacho. Las cargas no llevan: `asignar_folio_despacho` las rechaza.
+ *  - los textos para mostrarlo en el historial sin red, cuando el catálogo no
+ *    se puede consultar.
+ */
+export interface MovimientoNuevo extends Movimiento {
+  despachoId: Uuid | null;
+  codigoCilindro: string;
+  nombreCliente: string | null;
+  nombreSucursal: string | null;
+}
+
+/** Resultado de un listado de historial que combina servidor y cola local. */
+export interface HistorialMovimientos {
+  movimientos: MovimientoDetallado[];
+  /** true si no se pudo consultar el servidor: solo se ven los registros locales. */
+  incompleto: boolean;
 }
 
 export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {

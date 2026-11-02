@@ -1,14 +1,19 @@
 /**
  * Punto único de cableado de la capa de datos.
  *
- * Auth, camiones, clientes, sucursales y cilindros viven en Supabase. Los
- * movimientos siguen en memoria hasta la tarea de sincronización; cuando eso
- * pase, se reemplaza acá y no en las pantallas, que solo conocen la interfaz
- * `Repositorios`.
+ * Auth, camiones, clientes, sucursales, cilindros y movimientos viven en
+ * Supabase. Encima de eso, dos piezas locales que las pantallas no ven:
+ *  - el respaldo de catálogo para operar sin señal (`cacheCatalogo.ts`, usado
+ *    dentro de `repositorioSupabaseCatalogo.ts`);
+ *  - la cola de movimientos pendientes (`src/sync/colaLocal.ts`), que es la
+ *    fuente de los movimientos que todavía no llegan y de la proyección del
+ *    estado de los cilindros (`repositorioProyectado.ts`).
  */
 
 import type { Repositorios } from '../dominio/repositorios';
-import { crearRepositorioMovimientos } from './repositorioMemoria';
+import { colaLocal } from '../sync/colaLocal';
+import { crearRepositorioMovimientos } from './repositorioMovimientos';
+import { crearRepositorioCilindrosProyectado } from './repositorioProyectado';
 import {
   crearRepositorioAutenticacionSupabase,
   crearRepositorioCamionesSupabase,
@@ -19,15 +24,11 @@ import {
   crearRepositorioSucursalesSupabase,
 } from './repositorioSupabaseCatalogo';
 
-const clientes = crearRepositorioClientesSupabase();
-const sucursales = crearRepositorioSucursalesSupabase();
-const cilindros = crearRepositorioCilindrosSupabase();
-
 export const repos: Repositorios = {
   auth: crearRepositorioAutenticacionSupabase(),
   camiones: crearRepositorioCamionesSupabase(),
-  clientes,
-  sucursales,
-  cilindros,
-  movimientos: crearRepositorioMovimientos({ cilindros, sucursales, clientes }),
+  clientes: crearRepositorioClientesSupabase(),
+  sucursales: crearRepositorioSucursalesSupabase(),
+  cilindros: crearRepositorioCilindrosProyectado(crearRepositorioCilindrosSupabase(), colaLocal),
+  movimientos: crearRepositorioMovimientos(colaLocal),
 };
