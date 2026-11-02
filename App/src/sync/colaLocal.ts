@@ -44,8 +44,15 @@ CREATE TABLE IF NOT EXISTS movimientos_pendientes (
  * la toca: se agregan con `ALTER TABLE` solo si faltan (SQLite no tiene
  * `ADD COLUMN IF NOT EXISTS`). Las filas antiguas quedan `pendiente`, sin
  * despacho (no piden folio) y sin textos de despliegue.
+ *
+ * `sucursal_id` también va acá: la primera versión de la tabla (modelo de cinco
+ * tablas) tenía `cliente_id` en su lugar, y hay teléfonos con esa tabla creada.
+ * `cliente_id` se deja como está (es nullable y nadie la escribe). Una entrega o
+ * retiro antiguo sin `sucursal_id` lo rechaza el servidor por constraint y queda
+ * `rechazado` y visible: no se pierde ni bloquea la cola.
  */
 const COLUMNAS_NUEVAS: [nombre: string, definicion: string][] = [
+  ['sucursal_id', 'TEXT'],
   ['despacho_id', 'TEXT'],
   ['estado_envio', "TEXT NOT NULL DEFAULT 'pendiente'"],
   ['error_envio', 'TEXT'],
