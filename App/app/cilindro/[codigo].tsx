@@ -36,27 +36,37 @@ export default function DetalleCilindro() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [sucursal, setSucursal] = useState<Sucursal | null>(null);
   const [movimientos, setMovimientos] = useState<MovimientoDetallado[]>([]);
+  const [incompleto, setIncompleto] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     let vivo = true;
     void (async () => {
-      const c = await repos.cilindros.obtenerPorCodigo(String(codigo ?? ''));
-      if (!vivo) return;
-      setCilindro(c);
-      if (c) {
-        const [movs, suc] = await Promise.all([
-          repos.movimientos.listarPorCilindro(c.id),
-          c.sucursalActualId ? repos.sucursales.obtener(c.sucursalActualId) : Promise.resolve(null),
-        ]);
+      try {
+        const c = await repos.cilindros.obtenerPorCodigo(String(codigo ?? ''));
         if (!vivo) return;
-        setMovimientos(movs);
-        setSucursal(suc);
-        const cli = suc ? await repos.clientes.obtener(suc.clienteId) : null;
-        if (!vivo) return;
-        setCliente(cli);
+        setCilindro(c);
+        if (c) {
+          const [movs, suc] = await Promise.all([
+            repos.movimientos.listarPorCilindro(c.id),
+            c.sucursalActualId
+              ? repos.sucursales.obtener(c.sucursalActualId).catch(() => null)
+              : Promise.resolve(null),
+          ]);
+          if (!vivo) return;
+          setMovimientos(movs.movimientos);
+          setIncompleto(movs.incompleto);
+          setSucursal(suc);
+          const cli = suc ? await repos.clientes.obtener(suc.clienteId).catch(() => null) : null;
+          if (!vivo) return;
+          setCliente(cli);
+        }
+      } catch (e) {
+        if (vivo) setError(e instanceof Error && e.message ? e.message : 'No se pudo cargar el cilindro.');
+      } finally {
+        if (vivo) setCargando(false);
       }
-      setCargando(false);
     })();
     return () => {
       vivo = false;
@@ -79,7 +89,7 @@ export default function DetalleCilindro() {
       <>
         <Stack.Screen options={{ title: 'Detalle del cilindro' }} />
         <View style={estilos.contenido}>
-          <Nota tono="alerta" texto={`No se encontró el cilindro ${codigo}.`} />
+          <Nota tono="alerta" texto={error ?? `No se encontró el cilindro ${codigo}.`} />
         </View>
       </>
     );
@@ -141,6 +151,12 @@ export default function DetalleCilindro() {
 
         <View>
           <Seccion texto="Movimientos" />
+          {incompleto ? (
+            <Nota
+              tono="alerta"
+              texto="Sin conexión con el servidor: se muestran solo los movimientos guardados en este teléfono."
+            />
+          ) : null}
           <Tarjeta>
             {movimientos.length === 0 ? (
               <Vacio texto="Este cilindro todavía no tiene movimientos registrados en la app." />
@@ -185,10 +201,16 @@ export default function DetalleCilindro() {
                         {m.origenCodigo === 'manual' ? (
                           <Etiqueta texto="Manual" tono="alerta" />
                         ) : null}
-                        {m.fechaSync === null ? (
+                        {m.envio === 'pendiente' ? (
                           <Etiqueta texto="Sin enviar" tono="neutro" />
                         ) : null}
+                        {m.envio === 'rechazado' ? (
+                          <Etiqueta texto="Rechazado" tono="alerta" />
+                        ) : null}
                       </View>
+                      {m.envio === 'rechazado' && m.errorEnvio ? (
+                        <Text style={estilos.tenue}>Servidor: {m.errorEnvio}</Text>
+                      ) : null}
                       <Text style={estilos.tenue}>{fechaHora(m.fechaEvento)}</Text>
                       {m.nombreCliente ? (
                         <Text style={estilos.tenue}>

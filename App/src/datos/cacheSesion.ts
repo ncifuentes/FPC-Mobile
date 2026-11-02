@@ -10,6 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Camion, Usuario } from '../dominio/tipos';
+import * as cacheCatalogo from './cacheCatalogo';
 
 const CLAVE_USUARIO = 'fpc.cacheSesion.usuario';
 const CLAVE_CAMION = 'fpc.cacheSesion.camion';
@@ -36,7 +37,12 @@ export async function leerCamion(): Promise<Camion | null> {
   return bruto ? (JSON.parse(bruto) as Camion) : null;
 }
 
-/** Se llama al cerrar sesión: no debe sobrevivir perfil de un técnico anterior. */
+/**
+ * Se llama al cerrar sesión: no debe sobrevivir perfil de un técnico anterior,
+ * ni el catálogo, que está protegido por RLS. La cola de movimientos NO se
+ * borra: son registros de terreno que todavía no llegan al servidor.
+ */
 export async function borrar(): Promise<void> {
   await AsyncStorage.multiRemove([CLAVE_USUARIO, CLAVE_CAMION]);
+  await cacheCatalogo.borrar();
 }
