@@ -78,6 +78,16 @@ const secciones = [
           <slot />
         </div>
       </main>
+      <!-- Ola de la identidad de FPC al pie de cada vista (la misma del login). En flujo, no fija:
+           así nunca tapa tablas ni formularios, y se empuja al fondo cuando hay poco contenido. -->
+      <img
+        src="/login-ola.png"
+        alt=""
+        aria-hidden="true"
+        width="1200"
+        height="360"
+        class="pointer-events-none mt-6 h-16 w-full shrink-0 object-fill sm:h-20 lg:h-24 print:hidden"
+      />
     </div>
   </div>
 </Base>

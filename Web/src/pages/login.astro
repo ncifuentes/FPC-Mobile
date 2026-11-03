@@ -4,17 +4,25 @@ import Marca from '../components/Marca.astro';
 import FormularioLogin from '../components/FormularioLogin';
 ---
 <Base titulo="Iniciar sesión">
-  <div class="grid min-h-dvh place-items-center bg-gris-50 px-4 py-10">
-    <div class="w-full max-w-sm">
-      <div class="mb-8">
-        <Marca tamano="grande" />
-      </div>
+  <div class="relative flex min-h-dvh flex-col items-center overflow-hidden bg-white px-4">
+    <!-- El padding inferior deja libre el alto de la ola (misma imagen del login de la app). -->
+    <div class="flex w-full max-w-sm flex-1 flex-col justify-center gap-8 pt-10 pb-40 sm:pb-52">
+      <Marca tamano="grande" />
       <div class="rounded-xl border border-gris-200 bg-white p-6 shadow-sm sm:p-8">
         <FormularioLogin client:only="react" />
       </div>
-      <p class="mt-6 text-center text-xs text-gris-400">
+      <p class="text-center text-xs text-gris-400">
         Plataforma de administración · Comprometidos con la energía que mueve tu industria
       </p>
     </div>
+
+    <img
+      src="/login-ola.png"
+      alt=""
+      aria-hidden="true"
+      width="1200"
+      height="360"
+      class="pointer-events-none absolute inset-x-0 bottom-0 h-32 w-full object-fill sm:h-44 lg:h-52"
+    />
   </div>
 </Base>
