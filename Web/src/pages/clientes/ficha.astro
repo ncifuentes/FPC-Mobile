@@ -1,0 +1,8 @@
+---
+/** Ficha de un cliente: /clientes/ficha?id=<uuid>. Sitio estático: el cliente va como parámetro. */
+import Panel from '../../layouts/Panel.astro';
+import FichaCliente from '../../components/FichaCliente';
+---
+<Panel titulo="Ficha del cliente" seccion="clientes">
+  <FichaCliente client:only="react" />
+</Panel>
