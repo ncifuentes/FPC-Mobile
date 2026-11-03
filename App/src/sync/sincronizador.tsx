@@ -28,6 +28,7 @@ import React, {
   useState,
 } from 'react';
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 
 import { repos } from '../datos';
@@ -46,13 +47,19 @@ interface EstadoSync {
   conError: number;
   enLinea: boolean;
   sincronizando: boolean;
+  /** Último ciclo de envío que terminó sin cortarse por red (persiste entre reinicios). */
   ultimaSync: Date | null;
+  /** Fecha de la última descarga del respaldo de catálogo. */
+  catalogoActualizado: Date | null;
+  actualizandoCatalogo: boolean;
   /** Sube cada vez que un ciclo cambió algo: las pantallas lo usan para refrescar. */
   revision: number;
   /** Registra el movimiento: lo deja en la cola local e intenta enviarlo. */
   registrar(movimiento: MovimientoNuevo): Promise<void>;
   /** Fuerza un intento de envío. */
   sincronizar(): Promise<void>;
+  /** Vuelve a bajar el catálogo aunque esté reciente. `false` si no se pudo. */
+  actualizarCatalogo(): Promise<boolean>;
 }
 
 const Contexto = createContext<EstadoSync | null>(null);
@@ -61,6 +68,34 @@ const Contexto = createContext<EstadoSync | null>(null);
 const REINTENTO_MS = 60_000;
 /** Antigüedad a partir de la cual se vuelve a bajar el catálogo con red. */
 const REFRESCO_CATALOGO_MS = 15 * 60_000;
+
+/**
+ * Último envío, guardado con el usuario: así sobrevive a un reinicio y no se
+ * muestra el de otra persona que usó el mismo teléfono.
+ */
+const CLAVE_ULTIMA_SYNC = 'fpc.sync.ultima';
+
+async function leerUltimaSync(usuarioId: Uuid): Promise<Date | null> {
+  try {
+    const crudo = await AsyncStorage.getItem(CLAVE_ULTIMA_SYNC);
+    if (!crudo) return null;
+    const guardado = JSON.parse(crudo) as { usuarioId: Uuid; fecha: string };
+    return guardado.usuarioId === usuarioId ? new Date(guardado.fecha) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function guardarUltimaSync(usuarioId: Uuid, fecha: Date): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      CLAVE_ULTIMA_SYNC,
+      JSON.stringify({ usuarioId, fecha: fecha.toISOString() }),
+    );
+  } catch {
+    // Es solo informativo: si no se pudo guardar, se muestra hasta reiniciar.
+  }
+}
 
 const servidor: ServidorMovimientos = {
   async insertar(lote) {
@@ -92,9 +127,11 @@ export function ProveedorSync({
   const [enLinea, setEnLinea] = useState(hayRed());
   const [sincronizando, setSincronizando] = useState(false);
   const [ultimaSync, setUltimaSync] = useState<Date | null>(null);
+  const [catalogoActualizado, setCatalogoActualizado] = useState<Date | null>(null);
+  const [actualizandoCatalogo, setActualizandoCatalogo] = useState(false);
   const [revision, setRevision] = useState(0);
   const enCurso = useRef(false);
-  const descargando = useRef(false);
+  const descarga = useRef<Promise<boolean> | null>(null);
 
   const refrescarConteo = useCallback(async () => {
     const conteo = await colaLocal.contar();
@@ -102,17 +139,37 @@ export function ProveedorSync({
     setConError(conteo.conError);
   }, []);
 
-  const refrescarCatalogo = useCallback(async () => {
-    if (!usuarioId || descargando.current || !hayRed()) return;
-    const actual = await cacheCatalogo.leer();
-    if (actual && Date.now() - new Date(actual.fecha).getTime() < REFRESCO_CATALOGO_MS) return;
-    descargando.current = true;
-    try {
-      await descargarCatalogo();
-    } finally {
-      descargando.current = false;
-    }
-  }, [usuarioId]);
+  const refrescarCatalogo = useCallback(
+    async (forzar = false): Promise<boolean> => {
+      if (!usuarioId || !hayRed()) return false;
+      // Si ya hay una revisión o descarga en curso, se espera esa en vez de lanzar otra.
+      if (descarga.current) return descarga.current;
+      const tarea = (async () => {
+        const actual = await cacheCatalogo.leer();
+        if (!forzar && actual && Date.now() - new Date(actual.fecha).getTime() < REFRESCO_CATALOGO_MS) {
+          return true;
+        }
+        setActualizandoCatalogo(true);
+        try {
+          const ok = await descargarCatalogo();
+          const nuevo = await cacheCatalogo.leer();
+          setCatalogoActualizado(nuevo ? new Date(nuevo.fecha) : null);
+          return ok;
+        } finally {
+          setActualizandoCatalogo(false);
+        }
+      })();
+      descarga.current = tarea;
+      try {
+        return await tarea;
+      } finally {
+        descarga.current = null;
+      }
+    },
+    [usuarioId],
+  );
+
+  const actualizarCatalogo = useCallback(() => refrescarCatalogo(true), [refrescarCatalogo]);
 
   const sincronizar = useCallback(async () => {
     if (!usuarioId || enCurso.current || !hayRed()) return;
@@ -132,7 +189,11 @@ export function ProveedorSync({
       if (resultado.insertados.length > 0 || resultado.rechazados > 0 || resultado.folios > 0) {
         setRevision((r) => r + 1);
       }
-      if (!resultado.cortadoPorRed) setUltimaSync(new Date());
+      if (!resultado.cortadoPorRed) {
+        const ahora = new Date();
+        setUltimaSync(ahora);
+        void guardarUltimaSync(usuarioId, ahora);
+      }
     } catch (error) {
       // Lo que no alcanzó a procesarse sigue en la cola y se reintenta después.
       if (__DEV__) console.warn('[sync] falló el ciclo de envío', error);
@@ -159,6 +220,16 @@ export function ProveedorSync({
   useEffect(() => {
     let vivo = true;
     void refrescarConteo();
+    setUltimaSync(null);
+    if (usuarioId) {
+      // Si un envío terminó antes de leer lo guardado, gana el más reciente.
+      void leerUltimaSync(usuarioId).then((fecha) => {
+        if (vivo) setUltimaSync((actual) => actual ?? fecha);
+      });
+    }
+    void cacheCatalogo.leer().then((actual) => {
+      if (vivo) setCatalogoActualizado(actual ? new Date(actual.fecha) : null);
+    });
     void hayRedSegunSistema().then((conectado) => {
       if (!vivo) return;
       fijarEnLinea(conectado);
@@ -171,7 +242,7 @@ export function ProveedorSync({
     return () => {
       vivo = false;
     };
-  }, [refrescarConteo, sincronizar, refrescarCatalogo]);
+  }, [usuarioId, refrescarConteo, sincronizar, refrescarCatalogo]);
 
   // Al volver la conexión.
   useEffect(() => {
@@ -220,11 +291,26 @@ export function ProveedorSync({
       enLinea,
       sincronizando,
       ultimaSync,
+      catalogoActualizado,
+      actualizandoCatalogo,
       revision,
       registrar,
       sincronizar,
+      actualizarCatalogo,
     }),
-    [pendientes, conError, enLinea, sincronizando, ultimaSync, revision, registrar, sincronizar],
+    [
+      pendientes,
+      conError,
+      enLinea,
+      sincronizando,
+      ultimaSync,
+      catalogoActualizado,
+      actualizandoCatalogo,
+      revision,
+      registrar,
+      sincronizar,
+      actualizarCatalogo,
+    ],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

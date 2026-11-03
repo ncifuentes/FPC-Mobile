@@ -100,7 +100,7 @@ app/                      Rutas (expo-router, navegación basada en archivos)
     _layout.tsx           Pestañas Inicio / Historial / Perfil
     index.tsx             Inicio: accesos a las tres operaciones y franja de envío
     historial.tsx         Buscador de cilindros
-    perfil.tsx            Usuario y vehículo de la jornada
+    perfil.tsx            Usuario, vehículo de la jornada y estado de sincronización
   operacion/[tipo].tsx    Carga, entrega y retiro (una sola pantalla parametrizada)
   cilindro/[codigo].tsx   Ficha del cilindro con su línea de tiempo
 
@@ -155,6 +155,8 @@ Hecho:
       operar sin señal (HU-03, HU-09)
 - [x] Cola offline en SQLite: los movimientos se envían solos al volver la señal, con
       `upsert` idempotente y folio de despacho asignado por el servidor (HU-06 a HU-08)
+- [x] Estado de sincronización en Perfil: conexión, por enviar, rechazados, último envío,
+      fecha del catálogo y botón «Sincronizar ahora»
 - [x] Visibilidad restringida con RLS: el técnico solo ve y registra sus propios
       movimientos (HU-10 la planteó por camión; quedó por usuario)
 
@@ -175,7 +177,6 @@ En pausa (rama `feat/comprobantes`):
 
 Pendiente:
 
-- [ ] **Estado de sincronización en Perfil:** conexión, última sincronización y envío manual.
 - [ ] **Detalle de movimientos rechazados.** La franja de Inicio los cuenta, pero el técnico
       no puede ver el motivo ni hacer nada con ellos.
 - [ ] Definir si un **paquete de 90 m³** se mueve y se cobra como unidad o cilindro por cilindro.
