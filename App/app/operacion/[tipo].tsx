@@ -8,13 +8,14 @@ import { Boton, Campo, Contador, Etiqueta, Fila, Nota, Seccion, Tarjeta, Vacio }
 import { repos } from '../../src/datos';
 import { esperarCodigo } from '../../src/estado/capturaCodigo';
 import { useSesion } from '../../src/estado/sesion';
+import { useSync } from '../../src/sync/sincronizador';
 import {
   ETIQUETA_MOVIMIENTO,
   formatearCapacidad,
   type Cilindro,
   type Cliente,
-  type Movimiento,
   type MovimientoDetallado,
+  type MovimientoNuevo,
   type Sucursal,
   type TipoMovimiento,
 } from '../../src/dominio/tipos';
@@ -64,6 +65,36 @@ function fechaHora(iso: string): string {
   return `${d.toLocaleDateString('es-CL')} · ${hora(iso)}`;
 }
 
+function mensajeDe(e: unknown, respaldo: string): string {
+  return e instanceof Error && e.message ? e.message : respaldo;
+}
+
+/** Fila de "registros del día": lo que no llegó al servidor se marca sin rediseñar la lista. */
+function FilaRegistro({ m }: { m: MovimientoDetallado }) {
+  const lugar = m.nombreSucursal ?? m.nombreCliente ?? undefined;
+  if (m.envio === 'rechazado') {
+    return (
+      <Fila
+        icono="alert-circle-outline"
+        titulo={m.codigoCilindro}
+        subtitulo={`Rechazado por el servidor${m.errorEnvio ? `: ${m.errorEnvio}` : ''}`}
+        derecha={hora(m.fechaEvento)}
+      />
+    );
+  }
+  return (
+    <Fila
+      icono={m.envio === 'pendiente' ? 'cloud-upload-outline' : 'flask-outline'}
+      titulo={m.codigoCilindro}
+      subtitulo={lugar}
+      derecha={m.envio === 'pendiente' ? `${hora(m.fechaEvento)} · sin enviar` : hora(m.fechaEvento)}
+    />
+  );
+}
+
+const AVISO_INCOMPLETO =
+  'Sin conexión con el servidor: se muestran solo los registros guardados en este teléfono.';
+
 export default function PantallaOperacion() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tipo?: string }>();
@@ -72,6 +103,7 @@ export default function PantallaOperacion() {
     : 'carga') as TipoMovimiento;
 
   const { usuario, camion } = useSesion();
+  const { registrar, revision } = useSync();
 
   const necesitaCliente = tipo !== 'carga';
 
@@ -85,6 +117,11 @@ export default function PantallaOperacion() {
   const [cargandoSucursales, setCargandoSucursales] = useState(false);
 
   const [registros, setRegistros] = useState<MovimientoDetallado[]>([]);
+  const [incompleto, setIncompleto] = useState(false);
+  // Un despacho = los movimientos de esta pantalla en una misma sucursal. Al
+  // sincronizar se pide un solo folio para todos. Cambiar de sucursal (o salir
+  // de la pantalla) empieza otro. Las cargas no llevan despacho.
+  const [despachoId, setDespachoId] = useState<string | null>(null);
   const [ultimo, setUltimo] = useState<{ movimiento: MovimientoDetallado; cilindro: Cilindro } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -92,19 +129,31 @@ export default function PantallaOperacion() {
   const refrescar = useCallback(async () => {
     if (!camion) return;
     const delDia = await repos.movimientos.listarDelDia(camion.id, new Date());
-    setRegistros(delDia.filter((m) => m.tipo === tipo));
+    setRegistros(delDia.movimientos.filter((m) => m.tipo === tipo));
+    setIncompleto(delDia.incompleto);
   }, [camion, tipo]);
 
+  // `revision` cambia al registrar y cada vez que un envío cambia algo: así el
+  // marcador "sin enviar" desaparece solo cuando el movimiento llega.
   useEffect(() => {
     void refrescar();
-  }, [refrescar]);
+  }, [refrescar, revision]);
+
+  useEffect(() => {
+    setDespachoId(necesitaCliente && sucursal ? Crypto.randomUUID() : null);
+  }, [necesitaCliente, sucursal?.id]);
 
   useEffect(() => {
     if (!necesitaCliente) return;
     let vivo = true;
-    void repos.clientes.buscar(busqueda).then((r) => {
-      if (vivo) setResultados(r);
-    });
+    void repos.clientes
+      .buscar(busqueda)
+      .then((r) => {
+        if (vivo) setResultados(r);
+      })
+      .catch((e: unknown) => {
+        if (vivo) setError(mensajeDe(e, 'No se pudo cargar la lista de clientes.'));
+      });
     return () => {
       vivo = false;
     };
@@ -127,6 +176,9 @@ export default function PantallaOperacion() {
         if (!vivo) return;
         setSucursales(lista);
         if (lista.length === 1) setSucursal(lista[0]);
+      })
+      .catch((e: unknown) => {
+        if (vivo) setError(mensajeDe(e, 'No se pudo cargar las sucursales del cliente.'));
       })
       .finally(() => {
         if (vivo) setCargandoSucursales(false);
@@ -202,6 +254,8 @@ export default function PantallaOperacion() {
 
     setOcupado(true);
     try {
+      // Con red consulta Supabase; sin red, el respaldo del catálogo. En ambos
+      // casos el estado ya trae aplicados los movimientos pendientes de la cola.
       const cilindro = await repos.cilindros.obtenerPorCodigo(capturado.codigo);
       if (!cilindro) {
         setError(
@@ -216,7 +270,7 @@ export default function PantallaOperacion() {
         return;
       }
 
-      const movimiento: Movimiento = {
+      const movimiento: MovimientoNuevo = {
         uuidLocal: Crypto.randomUUID(),
         tipo,
         cilindroId: cilindro.id,
@@ -226,24 +280,29 @@ export default function PantallaOperacion() {
         fechaEvento: new Date().toISOString(),
         fechaSync: null,
         origenCodigo: capturado.origen,
+        despachoId: necesitaCliente ? despachoId : null,
+        codigoCilindro: cilindro.codigo,
+        nombreCliente: necesitaCliente ? (cliente?.nombre ?? null) : null,
+        nombreSucursal: necesitaCliente ? (sucursal?.nombre ?? null) : null,
       };
 
-      // Se registra directo contra el repositorio: la cola de pendientes y el
-      // envío por lotes llegan con el backend. El repositorio ya aplica el
-      // efecto sobre el estado del cilindro y es idempotente por uuidLocal.
-      await repos.movimientos.registrar(movimiento);
+      // A la cola local (idempotente por uuidLocal) y, si hay señal, sale de
+      // inmediato. Mientras no llegue, la proyección de la cola ya muestra el
+      // cilindro con su nuevo estado.
+      await registrar(movimiento);
       await refrescar();
 
       setUltimo({
         cilindro,
         movimiento: {
           ...movimiento,
-          codigoCilindro: cilindro.codigo,
-          nombreCliente: cliente?.nombre ?? null,
-          nombreSucursal: sucursal?.nombre ?? null,
           nombreUsuario: usuario.nombre,
+          envio: 'pendiente',
+          errorEnvio: null,
         },
       });
+    } catch (e) {
+      setError(mensajeDe(e, 'No se pudo registrar el cilindro. Intenta de nuevo.'));
     } finally {
       setOcupado(false);
     }
@@ -308,18 +367,12 @@ export default function PantallaOperacion() {
           />
 
           <Seccion texto={`${ETIQUETA_MOVIMIENTO[tipo]}s de hoy`} />
+          {incompleto ? <Nota tono="alerta" texto={AVISO_INCOMPLETO} /> : null}
           <Tarjeta style={{ paddingVertical: espacios.sm }}>
             {registros.length === 0 ? (
               <Vacio texto="Todavía no hay registros." />
             ) : (
-              registros.map((m) => (
-                <Fila
-                  key={m.uuidLocal}
-                  titulo={m.codigoCilindro}
-                  subtitulo={m.nombreSucursal ?? m.nombreCliente ?? undefined}
-                  derecha={hora(m.fechaEvento)}
-                />
-              ))
+              registros.map((m) => <FilaRegistro key={m.uuidLocal} m={m} />)
             )}
           </Tarjeta>
         </ScrollView>
@@ -495,18 +548,12 @@ export default function PantallaOperacion() {
         />
 
         <Seccion texto="Registros del día" style={{ marginBottom: 0 }} />
+        {incompleto ? <Nota tono="alerta" texto={AVISO_INCOMPLETO} /> : null}
         <Tarjeta style={{ paddingVertical: espacios.sm }}>
           {registros.length === 0 ? (
             <Vacio texto="Todavía no hay registros del día." />
           ) : (
-            registros.map((m) => (
-              <Fila
-                key={m.uuidLocal}
-                titulo={m.codigoCilindro}
-                subtitulo={m.nombreSucursal ?? m.nombreCliente ?? undefined}
-                derecha={hora(m.fechaEvento)}
-              />
-            ))
+            registros.map((m) => <FilaRegistro key={m.uuidLocal} m={m} />)
           )}
         </Tarjeta>
 
