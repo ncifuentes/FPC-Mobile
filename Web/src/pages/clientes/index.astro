@@ -1,0 +1,7 @@
+---
+import Panel from '../../layouts/Panel.astro';
+import ListaClientes from '../../components/ListaClientes';
+---
+<Panel titulo="Clientes" seccion="clientes">
+  <ListaClientes client:only="react" />
+</Panel>
