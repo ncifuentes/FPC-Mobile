@@ -252,3 +252,99 @@ Comprobación previa: los 11 cilindros del informe real están en el parque carg
 - **No se probó `db reset` desde cero** por la misma razón que en el Sprint 3: no hay
   Docker en esta máquina.
 - **No se conectó la app a Supabase.** Queda para el Sprint 5, según la tarjeta.
+
+---
+
+## Sprint 5 — Sincronización de la app, folio de despacho y comprobante por correo
+
+**Fecha de ejecución:** 03-11-2026
+**Proyecto:** `betqgklumvpneppoqhph` (fpc-mobile, producción)
+**Herramienta:** Supabase CLI 3.0 vía `npx supabase` (`migration list`, `db push`, `db query --linked`, `functions deploy`)
+
+### 1. Migraciones aplicadas desde el Sprint 4
+
+`npx supabase migration list --linked` muestra las 16 migraciones locales también aplicadas
+en el proyecto, sin diferencias. Las posteriores a la sección anterior:
+
+| Archivo | Contenido |
+|---|---|
+| `20261028100000_fijar_search_path_informe.sql` | Fija el `search_path` de `informe_envases_arrendados` (cierra el hallazgo de la sección 3 del Sprint 4) |
+| `20261028223411_auditoria_movimientos.sql` | Tabla de auditoría con el antes y el después de cada corrección de un movimiento |
+| `20261028230000_recarga_parque_cilindros.sql` | Recarga el parque de cilindros con las series corregidas |
+| `20261029002707_serie_normalizada.sql` | Búsqueda de la serie sin importar mayúsculas ni espacios, con índice único |
+| `20261029002715_vista_v_movimientos.sql` | Vista `v_movimientos` para la web, con `security_invoker` |
+| `20261029100000_asignar_folio_despacho.sql` | Migración 12: función para que la app pida el folio de despacho al sincronizar |
+| `20261103100000_comprobantes.sql` | Migración 13: comprobante de visita por correo (ver sección 2) |
+
+Las pruebas de las migraciones de auditoría, recarga, serie y vista no se registraron en este
+documento.
+
+### 2. Migración 13 — comprobantes
+
+Crea la tabla `comprobantes` (uno por folio, con estado `pendiente`, `enviado`, `error` o
+`sin_correo`) y tres funciones:
+
+- `registrar_comprobante`: la llama la app con la sesión del técnico al cerrar la visita.
+- `datos_comprobante` y `resultado_envio_comprobante`: solo las usa la Edge Function, con
+  `service_role`.
+
+**Prueba antes de aplicar.** La migración se ejecutó dentro de una transacción con un bloque
+de casos que termina en `raise exception`, así que todo se revierte. Resultados:
+
+| Caso | Resultado |
+|---|---|
+| Registrar el mismo folio dos veces no duplica | ✅ |
+| Sin correo queda `sin_correo` con el motivo | ✅ |
+| Correo inválido se rechaza (`22023`) | ✅ |
+| Otro técnico no puede registrar el comprobante de un folio ajeno | ✅ |
+| `authenticated` no puede ejecutar `datos_comprobante` ni actualizar la tabla | ✅ |
+| Las funciones de `service_role` devuelven los datos y registran el envío | ✅ |
+| Un comprobante ya `enviado` no vuelve a cambiar de estado | ✅ |
+
+Después del rollback, la tabla no existía y el correo de la sucursal usada seguía igual.
+
+**Verificación después de `db push`:**
+
+| Comprobación | Esperado | Obtenido | Resultado |
+|---|---|---|---|
+| RLS en `comprobantes` | activa | activa | ✅ |
+| Políticas | `comprobantes_select_tecnico`, `comprobantes_select_admin` | las dos | ✅ |
+| `registrar_comprobante` (authenticated / service_role) | sí / no | sí / no | ✅ |
+| `datos_comprobante` (authenticated / service_role) | no / sí | no / sí | ✅ |
+| `resultado_envio_comprobante` (authenticated / service_role) | no / sí | no / sí | ✅ |
+
+### 3. Edge Function `enviar-comprobante`
+
+Desplegada con `npx supabase functions deploy enviar-comprobante`. Una llamada sin sesión
+devuelve `401 Missing authorization header`.
+
+**No probado:** el envío real de un correo. La función necesita los secretos
+`RESEND_API_KEY` y `COMPROBANTE_REMITENTE`, que no están configurados porque FPC todavía no
+define el dominio remitente. Sin ellos, los comprobantes quedan `pendiente` y no se pierden.
+
+### 4. Cambios de datos en producción
+
+- **Folio 5 (Agricovial S.A.):** venía de una visita de prueba interna y quedó `pendiente`
+  con el correo real del cliente. Se cambió a `error` con el motivo «Visita de prueba
+  interna: no enviar al cliente», para que la función no lo envíe nunca.
+- **Cliente de prueba:** «CLIENTE DE PRUEBA (no facturar)», RUT `11111111-1`, con la sucursal
+  «PRUEBA» y un correo del equipo. Las visitas de prueba se hacen con este cliente. Es
+  visible para los técnicos en la app.
+
+### 5. Pruebas de la app (sin red)
+
+| Archivo | Qué prueba | Resultado |
+|---|---|---|
+| `pruebas/prueba_sync_local.mjs` (en `main`) | Ciclo de envío de movimientos y folio | 14/14 |
+| `pruebas/prueba_sync_local.mjs` (en `feat/comprobantes`) | Además, visitas y comprobantes | 26/26 |
+| `pruebas/prueba_comprobante_local.mjs` (en `feat/comprobantes`) | Plantilla del correo | 8/8 |
+
+### 6. Observaciones abiertas del Sprint 5
+
+- **Comprobante en pausa:** falta el dominio remitente de FPC, configurar Resend y probar un
+  envío real con el cliente de prueba.
+- **Folio por visita:** en `main`, con señal, cada cilindro de una visita recibe un folio
+  distinto. El arreglo está en `feat/comprobantes`.
+- **`prueba_sync_movimientos.mjs` en la rama** se ajustó al nuevo contrato de `asignarFolio`,
+  pero no se volvió a correr contra Supabase.
+- **No se probó `db reset` desde cero**, igual que en los sprints anteriores.
