@@ -14,8 +14,12 @@ Nicolás Cifuentes (análisis, documentación y pruebas).
 
 ```bash
 npm install
+cp .env.example .env      # en Windows: copy .env.example .env
 npx expo start
 ```
+
+`.env` lleva la URL y la clave publicable del proyecto Supabase (`EXPO_PUBLIC_SUPABASE_URL`,
+`EXPO_PUBLIC_SUPABASE_KEY`). No se sube al repositorio.
 
 Después, en el terminal de Expo: `a` para Android, `i` para iOS, o escanea el QR con
 **Expo Go** en el teléfono.
@@ -23,8 +27,8 @@ Después, en el terminal de Expo: `a` para Android, `i` para iOS, o escanea el Q
 > La cámara y SQLite **no funcionan en el navegador**. `npm run web` sirve para revisar
 > maquetación, pero el escáner y la cola offline sólo corren en un dispositivo o emulador.
 
-Credenciales de desarrollo: usuario `bnunez` (técnico) o `ncastillo` (admin), con
-cualquier contraseña no vacía. La autenticación real es Supabase Auth y llega en el Sprint 5.
+El inicio de sesión es con **Supabase Auth** (correo y contraseña). Entran las cuentas
+con rol `tecnico` o `admin` creadas en el proyecto; las cuentas de prueba no se anotan acá.
 
 Verificación de tipos:
 
@@ -38,13 +42,13 @@ npm run typecheck
 
 | Capa | Decisión |
 |---|---|
-| App móvil | **Expo (SDK 57) + React Native + expo-router** |
+| App móvil | **Expo (SDK 58) + React Native 0.88 + expo-router** |
 | Lenguaje | TypeScript en modo `strict` |
 | Escáner | `expo-camera` con formatos de **código de barras lineal** (code128, code39, EAN, UPC, ITF) |
-| Almacén offline | `expo-sqlite` |
+| Almacén offline | `expo-sqlite` (cola de movimientos) y AsyncStorage (respaldo del catálogo y la sesión) |
 | Estilos | Tokens propios en `src/theme/tokens.ts`, consumidos por `StyleSheet` |
-| Backend | **Supabase** (Postgres + Auth + RLS + API autogenerada) — todavía no conectado |
-| Plataforma web de administración | Astro + islas de React, sobre el mismo backend (Sprint 6) |
+| Backend | **Supabase** (Postgres + Auth + RLS + RPC), con `supabase-js` v2 |
+| Plataforma web de administración | Astro + islas de React, sobre el mismo backend (ver `Web/README.md`) |
 
 ### Por qué Expo y no Astro + Capacitor
 
@@ -76,7 +80,7 @@ encaje con el resto del proyecto:
 
 La decisión de arquitectura era «Tailwind con tema compartido». NativeWind es Tailwind
 para React Native, pero su versión estable (4.2.x, sobre `react-native-css-interop` 0.2.x)
-está construida contra Reanimated 3, y el SDK 57 usa **Reanimated 4**. La versión que sí
+está construida contra Reanimated 3, y Expo usa **Reanimated 4** desde el SDK 57. La versión que sí
 lo soporta todavía está en *release candidate*. Para un proyecto evaluado no conviene
 apoyarse en un RC, así que el tema compartido se implementó con tokens en TypeScript,
 que es lo que realmente cruza entre los dos frontends. Si NativeWind 5 sale estable
@@ -94,19 +98,25 @@ app/                      Rutas (expo-router, navegación basada en archivos)
   escaner.tsx             Modal de escaneo + ingreso manual del código
   (tabs)/
     _layout.tsx           Pestañas Inicio / Historial / Perfil
-    index.tsx             Inicio: accesos a las tres operaciones y estado de sync
+    index.tsx             Inicio: accesos a las tres operaciones y franja de envío
     historial.tsx         Buscador de cilindros
-    perfil.tsx            Usuario, vehículo de la jornada, estado de sincronización
+    perfil.tsx            Usuario y vehículo de la jornada
   operacion/[tipo].tsx    Carga, entrega y retiro (una sola pantalla parametrizada)
   cilindro/[codigo].tsx   Ficha del cilindro con su línea de tiempo
 
 src/
   theme/tokens.ts         Tema compartido con la plataforma web
   componentes/ui.tsx      Componentes reutilizables
+  componentes/EstadoEnvio.tsx  Franja de pendientes, errores y conexión
   dominio/tipos.ts        Tipos del esquema (clientes, cilindros, movimientos, ...)
   dominio/repositorios.ts Contratos de acceso a datos
-  datos/                  Implementación en memoria + datos de ejemplo
+  datos/index.ts          Cableado: qué implementación usa cada repositorio
+  datos/repositorioSupabase*.ts  Auth, camiones y catálogo desde Supabase
+  datos/cacheCatalogo.ts  Respaldo del catálogo para operar sin señal
+  datos/repositorioProyectado.ts Estado de los cilindros con lo que aún no se envía
+  datos/red.ts            Clasificación de errores (de red o rechazo definitivo)
   sync/colaLocal.ts       Cola de pendientes en SQLite
+  sync/procesarCola.ts    Ciclo de envío: movimientos y folio (sin React, probado en Node)
   sync/sincronizador.tsx  Estado de sincronización y envío automático
   estado/sesion.tsx       Sesión y vehículo de la jornada
   estado/capturaCodigo.ts Puente entre pantalla de operación y escáner
@@ -139,29 +149,45 @@ Hecho:
 
 - [x] Navegación completa y las ocho pantallas de los mockups
 - [x] Escáner de código de barras lineal con ingreso manual
-- [x] Validaciones de negocio por tipo de movimiento
-- [x] Cola offline en SQLite con detección de conexión y reenvío automático
-- [x] Capa de datos con interfaces y una implementación en memoria
+- [x] Validaciones de negocio por tipo de movimiento y aviso de capacidad del vehículo
+- [x] Inicio de sesión con Supabase Auth (HU-01)
+- [x] Clientes, sucursales, cilindros y camiones desde Supabase, con respaldo local para
+      operar sin señal (HU-03, HU-09)
+- [x] Cola offline en SQLite: los movimientos se envían solos al volver la señal, con
+      `upsert` idempotente y folio de despacho asignado por el servidor (HU-06 a HU-08)
+- [x] Visibilidad restringida con RLS: el técnico solo ve y registra sus propios
+      movimientos (HU-10 la planteó por camión; quedó por usuario)
+
+Pruebas (desde la raíz del repositorio):
+
+```bash
+node supabase/pruebas/prueba_sync_local.mjs        # ciclo de envío, sin red
+node supabase/pruebas/prueba_sync_movimientos.mjs  # contra Supabase, requiere .env y link
+```
+
+En pausa (rama `feat/comprobantes`):
+
+- [ ] **Comprobante de visita por correo.** Al finalizar la visita se confirma o se pide el
+      correo del cliente, y el comprobante sale por correo con Resend. La base y la función
+      `enviar-comprobante` ya están en producción; falta que FPC defina el dominio remitente.
+- [ ] **Un folio por visita.** Hoy, con señal, cada cilindro de una misma visita recibe un
+      folio distinto. El arreglo está en la misma rama.
 
 Pendiente:
 
-- [ ] **Conectar Supabase.** Escribir `src/datos/repositorioSupabase.ts` cumpliendo la
-      interfaz `Repositorios` y cambiar una línea en `src/datos/index.ts`.
-- [ ] **Envío real del lote** en `src/sync/sincronizador.tsx` (`enviarLote`), donde ya está
-      escrito el `upsert` que corresponde.
-- [ ] **Migrar el maestro de clientes** desde el export de KAME ONE. Bloqueado: el export
-      trae 434 fichas activas con rol de cliente y el jefe declara **120 activos**; hay que
-      pedirle la marca de cuáles son. `region` y `rubro` no existen en el origen y hay que
-      levantarlos.
+- [ ] **Estado de sincronización en Perfil:** conexión, última sincronización y envío manual.
+- [ ] **Detalle de movimientos rechazados.** La franja de Inicio los cuenta, pero el técnico
+      no puede ver el motivo ni hacer nada con ellos.
 - [ ] Definir si un **paquete de 90 m³** se mueve y se cobra como unidad o cilindro por cilindro.
-- [ ] Prueba de aceptación offline: modo avión → una carga y dos entregas (una con código
-      escrito a mano) → restablecer conexión → verificar que en el panel web aparecen
-      **tres** movimientos y no seis, y que el ingreso manual quedó marcado.
+- [ ] Prueba de aceptación offline en un teléfono (PB-28): modo avión → una carga y dos
+      entregas (una con código escrito a mano) → restablecer conexión → verificar que en el
+      panel web aparecen **tres** movimientos y no seis, y que el ingreso manual quedó marcado.
 
 ---
 
 ## Advertencia sobre datos
 
-`src/datos/datosEjemplo.ts` contiene datos **inventados**. El export
+`src/datos/datosEjemplo.ts` contiene datos **inventados** de la etapa previa a Supabase; la
+app ya no lo usa. El export
 `KAME ONE Fichas.xlsx` tiene datos personales reales (RUT, teléfono, e-mail) y no debe
 copiarse a este repositorio ni a ningún entregable.
