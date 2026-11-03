@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { EstadoEnvio } from '../../src/componentes/EstadoEnvio';
 import { useSesion } from '../../src/estado/sesion';
 import { colores, espacios, radios } from '../../src/theme/tokens';
 
@@ -53,10 +54,8 @@ const OPCIONES: Opcion[] = [
 const DISPOSICION: 'grilla' | 'lista' = 'grilla';
 
 /**
- * Pantalla de inicio: accesos a las tres operaciones y vehículo de la jornada.
- *
- * La tarjeta de estado de sincronización —conectado, movimientos en espera,
- * envío manual— va acá cuando exista la cola local de pendientes.
+ * Pantalla de inicio: estado de envío, accesos a las tres operaciones y
+ * vehículo de la jornada.
  */
 export default function Inicio() {
   const router = useRouter();
@@ -73,6 +72,8 @@ export default function Inicio() {
             Gestiona las operaciones de cilindros de forma simple y segura.
           </Text>
         </View>
+
+        <EstadoEnvio />
 
         {camion ? (
           <View style={estilos.vehiculo}>

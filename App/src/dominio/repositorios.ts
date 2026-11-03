@@ -1,18 +1,18 @@
 /**
  * Contratos de acceso a datos.
  *
- * Las pantallas sólo conocen estas interfaces. Hoy la implementación es en
- * memoria (`src/datos/repositorioMemoria.ts`); cuando la base esté migrada se
- * escribe `repositorioSupabase.ts` cumpliendo el mismo contrato y se cambia una
- * sola línea en `src/datos/index.ts`. Ninguna pantalla se reescribe.
+ * Las pantallas sólo conocen estas interfaces. La implementación vive en
+ * `src/datos/` (Supabase, respaldo de catálogo y cola local) y se cablea en
+ * `src/datos/index.ts`.
  */
 
 import type {
   Camion,
   Cilindro,
   Cliente,
+  HistorialMovimientos,
   Movimiento,
-  MovimientoDetallado,
+  MovimientoNuevo,
   Sucursal,
   Usuario,
   Uuid,
@@ -53,18 +53,17 @@ export interface RepositorioCamiones {
 
 export interface RepositorioMovimientos {
   /**
-   * Registra el movimiento localmente y lo deja en la cola de sincronización.
-   * Nace con `uuidLocal` y `fechaEvento`; `fechaSync` la pone el servidor.
+   * Deja el movimiento en la cola local de envío. Nace con `uuidLocal` y
+   * `fechaEvento`; `fechaSync` la pone el servidor. Las pantallas no lo llaman
+   * directo: pasan por `useSync().registrar`, que además dispara el envío.
    */
-  registrar(movimiento: Movimiento): Promise<void>;
-  /** Movimientos del día para el listado "Registros del día". */
-  listarDelDia(camionId: Uuid, fecha: Date): Promise<MovimientoDetallado[]>;
-  /** Historial completo de un cilindro. */
-  listarPorCilindro(cilindroId: Uuid): Promise<MovimientoDetallado[]>;
+  registrar(movimiento: MovimientoNuevo): Promise<void>;
+  /** Movimientos del día del vehículo: servidor + pendientes locales, sin duplicar. */
+  listarDelDia(camionId: Uuid, fecha: Date): Promise<HistorialMovimientos>;
+  /** Historial de un cilindro: servidor + pendientes locales, sin duplicar. */
+  listarPorCilindro(cilindroId: Uuid): Promise<HistorialMovimientos>;
   /** Movimientos aún no enviados al servidor. */
   listarPendientes(): Promise<Movimiento[]>;
-  /** Marca como sincronizados los movimientos cuyo uuidLocal se indique. */
-  marcarSincronizados(uuidsLocales: Uuid[], fechaSync: string): Promise<void>;
 }
 
 export interface Repositorios {
