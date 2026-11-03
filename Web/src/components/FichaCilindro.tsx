@@ -14,6 +14,7 @@ import { COLOR_ESTADO, COLOR_TIPO } from '../lib/estilos';
 import { llegoConRetraso, minutosDeRetraso } from '../lib/tablero';
 import { escucharMovimientos, type Conexion } from '../lib/tiempoReal';
 import IndicadorConexion from './IndicadorConexion';
+import { urlFichaCliente } from '../lib/clientes';
 
 type Carga =
   | { estado: 'sin_serie' }
@@ -243,7 +244,13 @@ function Ubicacion({ cilindro, ultimo }: { cilindro: Cilindro; ultimo?: Movimien
   return (
     <section className="rounded-lg border border-azul-100 bg-azul-50 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-azul-700">Ubicación actual</h2>
-      <p className="mt-2 text-lg font-bold text-gris-900">{titulo}</p>
+      {cilindro.estado === 'en_cliente' && cilindro.sucursales?.clientes?.id ? (
+        <a href={urlFichaCliente(cilindro.sucursales.clientes.id)} className="mt-2 block text-lg font-bold text-azul-700 hover:underline">
+          {titulo}
+        </a>
+      ) : (
+        <p className="mt-2 text-lg font-bold text-gris-900">{titulo}</p>
+      )}
       {detalle ? <p className="text-sm text-gris-700">{detalle}</p> : null}
       {desde ? (
         <p className="mt-3 text-sm text-gris-700">

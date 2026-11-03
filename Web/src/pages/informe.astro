@@ -1,0 +1,7 @@
+---
+import Panel from '../layouts/Panel.astro';
+import InformeArriendo from '../components/InformeArriendo';
+---
+<Panel titulo="Informe de arriendo" seccion="informe">
+  <InformeArriendo client:only="react" />
+</Panel>

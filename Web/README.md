@@ -38,7 +38,7 @@ npm run preview  # sirve Web/dist para revisarlo
 ```
 Web/
 ├── src/
-│   ├── pages/          rutas: login, inicio, tablero, cilindros/ (listado y ficha)
+│   ├── pages/          rutas: login, inicio, tablero, informe, cilindros/ y clientes/ (listado y ficha)
 │   ├── layouts/        Base (html) y Panel (menú, barra superior y guardia de sesión)
 │   ├── components/     islas de React y piezas de Astro
 │   ├── lib/
@@ -49,6 +49,8 @@ Web/
 │   │   ├── tablero.ts         datos y cálculos del tablero del día
 │   │   ├── cilindros.ts       listado buscable y ficha de un cilindro
 │   │   ├── tiempoReal.ts      suscripción Realtime a los cambios de movimientos
+│   │   ├── clientes.ts        cartera de clientes y ficha de un cliente
+│   │   ├── informe.ts         parámetros, totales y exportación del informe de arriendo
 │   │   └── database.types.ts  tipos generados desde el esquema
 │   └── styles/global.css
 └── tailwind.config.ts  toma la paleta y los radios de App/src/theme/tokens.ts
@@ -76,6 +78,11 @@ Web/
   `/cilindros/ficha?serie=<serie>` y no en `/cilindros/<serie>` (así no hay que generar una
   página por cada uno de los 2.178 envases). La serie se busca por `serie_normalizada`, así que
   da lo mismo escribirla con espacios o en minúsculas.
+- **El informe no recalcula nada.** El informe de arriendo llama a la función
+  `informe_envases_arrendados` de la base y solo muestra, suma y exporta su resultado: la
+  regla de días (fin exclusivo, PRO excluido, corte como foto) vive en un único lugar. Se
+  exporta como CSV con punto y coma y BOM, para que Excel en español lo abra directo, y se
+  imprime o guarda en PDF con los estilos `print:` (sin menú ni filtros).
 - **Vite fijado en 7.3.7** (`overrides` en `package.json`): Astro 6 usa Vite 7 y el plugin de
   Tailwind trae Vite 8 por defecto; sin el override, `astro check` falla por tipos
   incompatibles entre ambas versiones.
@@ -88,7 +95,7 @@ Web/
 | Inicio: parque por estado y últimos movimientos | HU-15 (parcial) | Listo |
 | Tablero del día y movimientos en vivo | HU-15, HU-19 | Listo |
 | Listado y ficha del cilindro | HU-16 | Listo |
-| Informe de arriendo del mes | HU-23 | Pendiente |
-| Ficha del cliente | HU-17 | Pendiente |
+| Informe de arriendo del mes | HU-23 | Listo |
+| Listado y ficha del cliente | HU-17 | Listo |
 | Mantenedores de clientes, cilindros y usuarios | HU-12 a HU-14 | Pendiente |
 | Corrección de movimientos con auditoría | HU-18 | Pendiente |
