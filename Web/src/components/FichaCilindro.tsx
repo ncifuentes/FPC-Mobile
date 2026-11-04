@@ -15,13 +15,22 @@ import { llegoConRetraso, minutosDeRetraso } from '../lib/tablero';
 import { escucharMovimientos, type Conexion } from '../lib/tiempoReal';
 import IndicadorConexion from './IndicadorConexion';
 import { urlFichaCliente } from '../lib/clientes';
+import { obtenerPerfil, puedeEditar as puedeEditarPerfil } from '../lib/sesion';
+import { cargarAuditoria, nombresDeUsuarios, type RegistroAuditoria } from '../lib/correccion';
+import CorregirMovimiento from './CorregirMovimiento';
 
 type Carga =
   | { estado: 'sin_serie' }
   | { estado: 'cargando' }
   | { estado: 'error' }
   | { estado: 'no_existe'; serie: string; parecidas: string[] }
-  | { estado: 'listo'; cilindro: Cilindro; historial: MovimientoHistorial[] };
+  | {
+      estado: 'listo';
+      cilindro: Cilindro;
+      historial: MovimientoHistorial[];
+      auditoria: RegistroAuditoria[];
+      nombres: Map<string, string>;
+    };
 
 const NOMBRE_ENVASE: Record<string, string> = { cilindro: 'Cilindro', paquete: 'Paquete', termo: 'Termo' };
 const NOMBRE_UNIDAD: Record<string, string> = { m3: 'm³', kg: 'kg' };
@@ -33,12 +42,18 @@ function serieDeLaUrl(): string {
 /**
  * Ficha del cilindro (HU-16): ubicación actual, cuánto tiempo lleva ahí e historial completo
  * de movimientos. Se actualiza sola cuando la app sincroniza un movimiento de este envase.
+ * Desde el historial, el admin corrige un movimiento mal registrado (HU-18).
  */
 export default function FichaCilindro() {
   const [serie] = useState(serieDeLaUrl);
   const [carga, setCarga] = useState<Carga>(serie ? { estado: 'cargando' } : { estado: 'sin_serie' });
   const [conexion, setConexion] = useState<Conexion>('conectando');
   const [volver] = useState(destinoVolver);
+  const [editor, setEditor] = useState(false);
+
+  useEffect(() => {
+    void obtenerPerfil().then((p) => setEditor(!!p && puedeEditarPerfil(p)));
+  }, []);
 
   const cargar = useCallback(async () => {
     try {
@@ -48,7 +63,10 @@ export default function FichaCilindro() {
         return;
       }
       const historial = await cargarHistorial(cilindro.id);
-      setCarga({ estado: 'listo', cilindro, historial });
+      // La auditoría es un extra: si no se puede leer, la ficha se muestra igual.
+      const auditoria = await cargarAuditoria(historial.map((m) => m.uuid_local ?? '')).catch(() => []);
+      const nombres = await nombresDeUsuarios(auditoria.map((a) => a.cambiado_por ?? '').filter(Boolean));
+      setCarga({ estado: 'listo', cilindro, historial, auditoria, nombres });
     } catch {
       setCarga({ estado: 'error' });
     }
@@ -103,7 +121,15 @@ export default function FichaCilindro() {
       ) : carga.estado === 'no_existe' ? (
         <NoExiste serie={carga.serie} parecidas={carga.parecidas} />
       ) : (
-        <Ficha cilindro={carga.cilindro} historial={carga.historial} conexion={conexion} />
+        <Ficha
+          cilindro={carga.cilindro}
+          historial={carga.historial}
+          auditoria={carga.auditoria}
+          nombres={carga.nombres}
+          conexion={conexion}
+          puedeEditar={editor}
+          onCorregido={() => void cargar()}
+        />
       )}
     </div>
   );
@@ -162,7 +188,23 @@ function NoExiste({ serie, parecidas }: { serie: string; parecidas: string[] }) 
   );
 }
 
-function Ficha({ cilindro, historial, conexion }: { cilindro: Cilindro; historial: MovimientoHistorial[]; conexion: Conexion }) {
+function Ficha({
+  cilindro,
+  historial,
+  auditoria,
+  nombres,
+  conexion,
+  puedeEditar,
+  onCorregido,
+}: {
+  cilindro: Cilindro;
+  historial: MovimientoHistorial[];
+  auditoria: RegistroAuditoria[];
+  nombres: Map<string, string>;
+  conexion: Conexion;
+  puedeEditar: boolean;
+  onCorregido: () => void;
+}) {
   const p = cilindro.productos;
   const capacidad = p?.capacidad != null ? `${numero.format(p.capacidad)} ${NOMBRE_UNIDAD[p.unidad ?? ''] ?? p.unidad ?? ''}` : null;
   const esPro = p?.envase_codigo === 'PRO';
@@ -188,9 +230,10 @@ function Ficha({ cilindro, historial, conexion }: { cilindro: Cilindro; historia
         <IndicadorConexion conexion={conexion} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <div className="flex flex-col gap-6">
-          <Ubicacion cilindro={cilindro} ultimo={historial[0]} />
+      {/* Ubicación y datos arriba, historial a todo el ancho: así la tabla cabe completa,
+          con el botón «Corregir» a la vista, sin desplazarse hacia el lado. */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Ubicacion cilindro={cilindro} ultimo={historial[0]} />
 
           <section className="rounded-lg border border-gris-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-gris-900">Datos del envase</h2>
@@ -203,10 +246,16 @@ function Ficha({ cilindro, historial, conexion }: { cilindro: Cilindro; historia
               <Dato nombre="Arriendo" valor={esPro ? 'No se cobra (categoría PRO)' : 'Se cobra'} />
             </dl>
           </section>
-        </div>
-
-        <Historial historial={historial} />
       </div>
+
+      <Historial
+          historial={historial}
+          auditoria={auditoria}
+          nombres={nombres}
+          serie={cilindro.numero_serie}
+          puedeEditar={puedeEditar}
+          onCorregido={onCorregido}
+        />
     </>
   );
 }
@@ -267,7 +316,25 @@ function Ubicacion({ cilindro, ultimo }: { cilindro: Cilindro; ultimo?: Movimien
   );
 }
 
-function Historial({ historial }: { historial: MovimientoHistorial[] }) {
+function Historial({
+  historial,
+  auditoria,
+  nombres,
+  serie,
+  puedeEditar,
+  onCorregido,
+}: {
+  historial: MovimientoHistorial[];
+  auditoria: RegistroAuditoria[];
+  nombres: Map<string, string>;
+  serie: string;
+  puedeEditar: boolean;
+  onCorregido: () => void;
+}) {
+  const [abierto, setAbierto] = useState<MovimientoHistorial | null>(null);
+  const correcciones = new Map<string, number>();
+  for (const a of auditoria) correcciones.set(a.movimiento_uuid, (correcciones.get(a.movimiento_uuid) ?? 0) + 1);
+  const conColumna = puedeEditar || auditoria.length > 0;
   return (
     <section className="min-w-0 rounded-lg border border-gris-200 bg-white shadow-sm">
       <header className="flex items-baseline justify-between gap-4 border-b border-gris-200 px-5 py-4">
@@ -290,13 +357,16 @@ function Historial({ historial }: { historial: MovimientoHistorial[] }) {
                 <th className="px-3 py-3 font-medium">Cliente · sucursal</th>
                 <th className="px-3 py-3 font-medium">Técnico</th>
                 <th className="px-5 py-3 text-right font-medium">Llegó</th>
+                {conColumna ? (
+                  <th className="sticky right-0 bg-white px-5 py-3 text-right font-medium">{puedeEditar ? 'Acción' : ''}</th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-gris-100">
               {historial.map((m) => {
                 const tarde = llegoConRetraso(m);
                 return (
-                  <tr key={m.uuid_local} className={tarde ? 'bg-alerta-fondo/50' : undefined}>
+                  <tr key={m.uuid_local} className={tarde ? 'bg-alerta-fondo' : undefined}>
                     <td className="whitespace-nowrap px-5 py-3 tabular-nums text-gris-700">
                       {formatoFechaHora(m.fecha_evento)}
                       {m.codigo_origen === 'manual' ? (
@@ -331,6 +401,34 @@ function Historial({ historial }: { historial: MovimientoHistorial[] }) {
                         <span className="text-gris-500">al momento</span>
                       )}
                     </td>
+                    {conColumna ? (
+                      <td className={`sticky right-0 whitespace-nowrap px-5 py-3 text-right ${tarde ? 'bg-alerta-fondo' : 'bg-white'}`}>
+                        {correcciones.get(m.uuid_local ?? '') ? (
+                          <span className="mr-2 rounded-full bg-alerta-fondo px-2 py-0.5 text-xs font-semibold text-alerta" title="Este movimiento fue corregido">
+                            corregido{(correcciones.get(m.uuid_local ?? '') ?? 0) > 1 ? ` ×${correcciones.get(m.uuid_local ?? '')}` : ''}
+                          </span>
+                        ) : null}
+                        {puedeEditar || correcciones.get(m.uuid_local ?? '') ? (
+                          <button
+                            type="button"
+                            onClick={() => setAbierto(m)}
+                            className={
+                              puedeEditar
+                                ? 'inline-flex items-center gap-1.5 rounded-md border border-azul-700 bg-white px-3 py-1.5 text-sm font-semibold text-azul-700 hover:bg-azul-50'
+                                : 'text-sm font-semibold text-azul-700 hover:underline'
+                            }
+                          >
+                            {puedeEditar ? (
+                              <>
+                                <span aria-hidden="true">✎</span> Corregir
+                              </>
+                            ) : (
+                              'Ver'
+                            )}
+                          </button>
+                        ) : null}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}
@@ -347,6 +445,20 @@ function Historial({ historial }: { historial: MovimientoHistorial[] }) {
         <p className="border-t border-gris-200 px-5 py-3 text-xs text-gris-500">
           Primer movimiento registrado: {formatoFecha(historial.at(-1)?.fecha_evento ?? null)}
         </p>
+      ) : null}
+      {abierto ? (
+        <CorregirMovimiento
+          movimiento={abierto}
+          serie={serie}
+          auditoria={auditoria}
+          nombres={nombres}
+          puedeEditar={puedeEditar}
+          onCerrar={() => setAbierto(null)}
+          onGuardado={() => {
+            setAbierto(null);
+            onCorregido();
+          }}
+        />
       ) : null}
     </section>
   );

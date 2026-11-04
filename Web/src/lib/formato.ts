@@ -91,6 +91,32 @@ export function inicioDelDiaEnChile(dia: string): string {
   return `${dia}T00:00:00${desfaseChile(mediodia)}`;
 }
 
+const partesChile = new Intl.DateTimeFormat('en-CA', {
+  timeZone: ZONA,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** Instante → valor de un <input type="datetime-local"> en hora de Chile ("2026-10-28T15:14"). */
+export function aHoraLocalChile(iso: string): string {
+  const p = Object.fromEntries(partesChile.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+/**
+ * Valor de un <input type="datetime-local"> leído como hora de Chile → instante ISO con su
+ * desfase ("2026-10-28T15:14:00-03:00"). El desfase se toma en ese mismo día y hora.
+ */
+export function desdeHoraLocalChile(local: string): string {
+  const [dia, hora] = local.split('T');
+  const aprox = new Date(`${dia}T${hora}:00Z`);
+  return `${dia}T${hora}:00${desfaseChile(aprox)}`;
+}
+
 /** Rango [desde, hasta) de un día de Chile, para filtrar por fecha_evento. */
 export function rangoDelDia(dia: string): { desde: string; hasta: string } {
   return { desde: inicioDelDiaEnChile(dia), hasta: inicioDelDiaEnChile(sumarDias(dia, 1)) };
