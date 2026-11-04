@@ -105,6 +105,8 @@ function crearServidorFalso() {
     folioConRedCaida: false,
     llamadasInsertar: 0,
     llamadasFolio: 0,
+    /** uuids de cada llamada a `asignarFolio`, en orden. */
+    gruposFolio: [],
     async insertar(lote) {
       s.llamadasInsertar += 1;
       if (s.redCaida) return { message: 'TypeError: Network request failed', code: '', status: 0 };
@@ -121,6 +123,7 @@ function crearServidorFalso() {
     },
     async asignarFolio(uuids) {
       s.llamadasFolio += 1;
+      s.gruposFolio.push([...uuids]);
       if (s.folioConRedCaida) return { message: 'FetchError: timeout', code: '', status: 0 };
       if (uuids.some((u) => !filas.has(u))) {
         return { message: 'Faltan movimientos en el servidor', code: 'P0001', status: 400 };
@@ -311,6 +314,163 @@ function crearServidorFalso() {
   caso(
     'Sync: solo se envían los movimientos del usuario de la sesión',
     srv.llamadasInsertar === 0 && (await cola.listar()).length === 1,
+  );
+}
+
+/* ------------------------------------------- 3. un folio por visita */
+
+/** Escanea con señal: encola y corre un ciclo, como `registrar` en la app. */
+async function escanearConSenal(cola, srv, m) {
+  await cola.encolar(m);
+  await procesarCola(cola, srv, USUARIO);
+}
+
+const mismoConjunto = (a, b) => a.length === b.length && a.every((u) => b.includes(u));
+
+{
+  // El error de main: con señal, cada cilindro subía y pedía su folio solo.
+  const cola = crearColaMemoria();
+  const srv = crearServidorFalso();
+  await cola.abrirDespacho({ despachoId: 'v1', usuarioId: USUARIO, sucursalId: SUC_A });
+  const visita = ['c1', 'c2', 'c3'].map((c, i) => mov('entrega', c, i, { despachoId: 'v1' }));
+  for (const m of visita) await escanearConSenal(cola, srv, m);
+  const mientras = await cola.listar();
+  const conteo = await cola.contar();
+  caso(
+    'Visita: con señal y la visita abierta, los 3 cilindros suben pero no piden folio',
+    srv.filas.size === 3 &&
+      srv.llamadasFolio === 0 &&
+      mientras.every((m) => m.estadoEnvio === 'sin_folio') &&
+      conteo.pendientes === 0,
+    `filas=${srv.filas.size} llamadasFolio=${srv.llamadasFolio} pendientes=${conteo.pendientes}`,
+  );
+
+  await cola.cerrarDespacho('v1');
+  const r = await procesarCola(cola, srv, USUARIO);
+  const uuids = visita.map((m) => m.uuidLocal);
+  const folios = new Set(uuids.map((u) => srv.folios.get(u)));
+  caso(
+    'Visita: al cerrarla, 1 llamada a asignar_folio_despacho con los 3 uuid_local y 1 folio',
+    r.folios === 1 &&
+      srv.llamadasFolio === 1 &&
+      mismoConjunto(srv.gruposFolio[0], uuids) &&
+      folios.size === 1 &&
+      !folios.has(undefined),
+    `llamadas=${srv.llamadasFolio} grupo=${srv.gruposFolio[0]?.length} folios=${[...folios]}`,
+  );
+  caso(
+    'Visita: terminada, no queda nada en la cola ni la visita',
+    (await cola.listar()).length === 0 && (await cola.listarDespachos()).length === 0,
+  );
+}
+
+{
+  // Filas sin registro de visita (de antes del arreglo): piden folio como antes.
+  const cola = crearColaMemoria();
+  const srv = crearServidorFalso();
+  const antiguas = ['c1', 'c2'].map((c, i) => mov('entrega', c, i, { despachoId: 'sin-registro' }));
+  for (const m of antiguas) await cola.encolar(m);
+  const r = await procesarCola(cola, srv, USUARIO);
+  caso(
+    'Visita: un despacho sin registro local (cola antigua) pide su folio igual',
+    r.folios === 1 && (await cola.listar()).length === 0,
+    `folios=${r.folios}`,
+  );
+}
+
+{
+  // Dos visitas distintas: folios distintos y consecutivos.
+  const cola = crearColaMemoria();
+  const srv = crearServidorFalso();
+  for (const [id, sucursal, cilindros] of [
+    ['va', SUC_A, ['c1', 'c2']],
+    ['vb', 'sucursal-b', ['c3']],
+  ]) {
+    await cola.abrirDespacho({ despachoId: id, usuarioId: USUARIO, sucursalId: sucursal });
+    for (const [i, c] of cilindros.entries()) {
+      await escanearConSenal(cola, srv, mov('entrega', c, i, { despachoId: id, sucursalId: sucursal }));
+    }
+    await cola.cerrarDespacho(id);
+  }
+  await procesarCola(cola, srv, USUARIO);
+  const porVisita = srv.gruposFolio.map((g) => srv.folios.get(g[0]));
+  caso(
+    'Visita: dos visitas reciben folios distintos y consecutivos',
+    srv.llamadasFolio === 2 && porVisita[1] === porVisita[0] + 1,
+    `folios=${porVisita}`,
+  );
+}
+
+{
+  // Cerrada sin red para el folio: el reintento no reenvía ni numera dos veces.
+  const cola = crearColaMemoria();
+  const srv = crearServidorFalso();
+  await cola.abrirDespacho({ despachoId: 'vr', usuarioId: USUARIO, sucursalId: SUC_A });
+  const visita = ['c1', 'c2', 'c3'].map((c, i) => mov('retiro', c, i, { despachoId: 'vr' }));
+  for (const m of visita) await escanearConSenal(cola, srv, m);
+  await cola.cerrarDespacho('vr');
+  srv.folioConRedCaida = true;
+  const r = await procesarCola(cola, srv, USUARIO);
+  const intermedio = await cola.listar();
+  srv.folioConRedCaida = false;
+  const insertsAntes = srv.llamadasInsertar;
+  await procesarCola(cola, srv, USUARIO);
+  await procesarCola(cola, srv, USUARIO);
+  const folios = new Set(visita.map((m) => srv.folios.get(m.uuidLocal)));
+  caso(
+    'Visita: folio sin red al cerrar → reintento sin reenviar, 1 folio para los 3',
+    r.cortadoPorRed &&
+      intermedio.length === 3 &&
+      (await cola.listarDespachos()).length === 0 &&
+      srv.llamadasInsertar === insertsAntes &&
+      folios.size === 1 &&
+      srv.gruposFolio.every((g) => mismoConjunto(g, visita.map((m) => m.uuidLocal))),
+    `llamadasFolio=${srv.llamadasFolio} folios=${[...folios]}`,
+  );
+}
+
+{
+  // La app se cerró con la visita abierta: al volver se cierra sola. La del
+  // otro usuario del teléfono no se toca.
+  const cola = crearColaMemoria();
+  const srv = crearServidorFalso();
+  await cola.abrirDespacho({ despachoId: 'vp', usuarioId: USUARIO, sucursalId: SUC_A });
+  await cola.abrirDespacho({ despachoId: 'vo', usuarioId: 'otro', sucursalId: SUC_A });
+  for (const [i, c] of ['c1', 'c2'].entries()) {
+    await escanearConSenal(cola, srv, mov('entrega', c, i, { despachoId: 'vp' }));
+  }
+  await cola.cerrarDespachosAbiertos(USUARIO);
+  const r = await procesarCola(cola, srv, USUARIO);
+  const visitas = await cola.listarDespachos();
+  caso(
+    'Visita: abierta al reiniciar la app → se cierra sola y recibe 1 folio',
+    r.folios === 1 &&
+      visitas.length === 1 &&
+      visitas[0].despachoId === 'vo' &&
+      visitas[0].estado === 'abierto',
+    `folios=${r.folios} visitas=${JSON.stringify(visitas.map((v) => [v.despachoId, v.estado]))}`,
+  );
+}
+
+{
+  // Sin señal toda la visita: al volver, 1 lote y 1 folio.
+  const cola = crearColaMemoria();
+  const srv = crearServidorFalso();
+  srv.redCaida = true;
+  await cola.abrirDespacho({ despachoId: 'vs', usuarioId: USUARIO, sucursalId: SUC_A });
+  const visita = ['c1', 'c2', 'c3'].map((c, i) => mov('entrega', c, i, { despachoId: 'vs' }));
+  for (const m of visita) await escanearConSenal(cola, srv, m);
+  await cola.cerrarDespacho('vs');
+  srv.redCaida = false;
+  srv.llamadasInsertar = 0;
+  const r = await procesarCola(cola, srv, USUARIO);
+  caso(
+    'Visita: hecha sin señal → al volver, 1 lote y 1 folio con los 3',
+    srv.llamadasInsertar === 1 &&
+      r.folios === 1 &&
+      srv.llamadasFolio === 1 &&
+      mismoConjunto(srv.gruposFolio[0], visita.map((m) => m.uuidLocal)),
+    `inserts=${srv.llamadasInsertar} llamadasFolio=${srv.llamadasFolio}`,
   );
 }
 

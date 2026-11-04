@@ -348,3 +348,42 @@ define el dominio remitente. Sin ellos, los comprobantes quedan `pendiente` y no
 - **`prueba_sync_movimientos.mjs` en la rama** se ajustó al nuevo contrato de `asignarFolio`,
   pero no se volvió a correr contra Supabase.
 - **No se probó `db reset` desde cero**, igual que en los sprints anteriores.
+
+---
+
+## Arreglo del folio por visita (rama `fix/folio-por-visita`)
+
+**Fecha de ejecución:** 04-11-2026
+**Proyecto:** `betqgklumvpneppoqhph` (fpc-mobile, producción)
+
+Cierra la observación «Folio por visita» de la sección 6 anterior. El error estaba solo en la
+app: con señal, cada cilindro subía apenas se escaneaba y el ciclo pedía su folio en ese
+momento. Ahora la app abre una visita con el primer cilindro y pide el folio al cerrarla. No
+hizo falta ninguna migración: `asignar_folio_despacho` en producción es igual a la
+migración 12.
+
+**Antes de cambiar código (solo lectura):** `migration list` sin diferencias (17
+migraciones, incluida `20261103233054_cuentas_de_acceso.sql`).
+
+### Prueba local (`pruebas/prueba_sync_local.mjs`)
+
+22/22. Los 8 casos nuevos de visita fallan con el `procesarCola.ts` de `main` (3 llamadas a
+`asignar_folio_despacho` y folios 100, 101 y 102 para una misma visita) y pasan con el arreglo.
+
+### Prueba contra Supabase (`pruebas/prueba_folio_visita.mjs`)
+
+Técnico de prueba A, 6 cilindros `en_planta` sin movimientos, marca `PRUEBA-FOLIO`.
+
+| Caso | Resultado |
+|---|---|
+| Visita abierta: 3 entregas suben con señal y ninguna recibe folio | ✅ |
+| Al cerrar la visita, las 3 quedan con el mismo folio (7) | ✅ |
+| Repetir `asignar_folio_despacho` devuelve 7 y no cambia las filas | ✅ |
+| Una segunda visita (otra sucursal) recibe el folio 8 | ✅ |
+
+**Limpieza:** 0 movimientos con la marca; los 6 cilindros volvieron a `en_planta`. Quedaron
+12 filas en `movimientos_auditoria` (inmutable por diseño). La prueba consumió los folios 7 y
+8 de `folio_operacion_seq`, que no se reinició.
+
+`prueba_sync_movimientos.mjs` no se volvió a correr: escribe en la base real y en esta tarea
+solo se autorizó el script del folio.
