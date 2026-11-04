@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { cargarFichaCliente, MOVIMIENTOS_RECIENTES, urlInforme, type FichaCliente as Datos, type Sucursal } from '../lib/clientes';
+import {
+  cargarFichaCliente,
+  cargarHistorialCliente,
+  POR_PAGINA_HISTORIAL,
+  urlInforme,
+  type FichaCliente as Datos,
+  type FiltrosHistorial,
+  type MovimientoCliente,
+  type Sucursal,
+} from '../lib/clientes';
+import { generarInforme, mesActual, periodoDelMes, totales } from '../lib/informe';
 import { urlFicha } from '../lib/cilindros';
 import { diaEnChile, diasEntre, formatoFecha, formatoFechaHora, NOMBRE_TIPO, numero } from '../lib/formato';
 import { COLOR_TIPO } from '../lib/estilos';
@@ -20,13 +30,16 @@ function diasEnCliente(desde: string | null, hoy: string): number {
 
 /**
  * Ficha del cliente (HU-17): sus sucursales, los cilindros que tiene en su poder y cuánto
- * tiempo llevan ahí, y sus últimos movimientos. Lleva al informe de arriendo del mes.
+ * tiempo llevan ahí, lo devengado en el mes en curso (envases y días) y el historial completo de
+ * entregas y retiros. Lleva al informe de arriendo del mes.
  */
 export default function FichaCliente() {
   const [id] = useState(idDeLaUrl);
   const [carga, setCarga] = useState<Carga>(id ? { estado: 'cargando' } : { estado: 'no_existe' });
   const [conexion, setConexion] = useState<Conexion>('conectando');
   const [sucursal, setSucursal] = useState('');
+  // Sube con cada cambio en vivo: el resumen del mes y el historial se vuelven a leer.
+  const [version, setVersion] = useState(0);
   const [volver] = useState(() => {
     try {
       const desde = document.referrer ? new URL(document.referrer) : null;
@@ -42,6 +55,7 @@ export default function FichaCliente() {
     try {
       const datos = await cargarFichaCliente(id);
       setCarga(datos ? { estado: 'listo', datos } : { estado: 'no_existe' });
+      setVersion((v) => v + 1);
     } catch {
       setCarga({ estado: 'error' });
     }
@@ -57,7 +71,7 @@ export default function FichaCliente() {
   }, [nombre]);
 
   // En vivo: Realtime no puede filtrar por cliente (el movimiento solo trae la sucursal), así que
-  // cualquier cambio en movimientos vuelve a leer la ficha. Son tres consultas chicas.
+  // cualquier cambio en movimientos vuelve a leer la ficha. Son consultas chicas.
   const listo = carga.estado === 'listo';
   useEffect(() => {
     if (!listo) return;
@@ -96,7 +110,7 @@ export default function FichaCliente() {
           </p>
         </div>
       ) : (
-        <Ficha datos={carga.datos} conexion={conexion} sucursal={sucursal} onSucursal={setSucursal} />
+        <Ficha datos={carga.datos} conexion={conexion} sucursal={sucursal} onSucursal={setSucursal} version={version} />
       )}
     </div>
   );
@@ -107,13 +121,15 @@ function Ficha({
   conexion,
   sucursal,
   onSucursal,
+  version,
 }: {
   datos: Datos;
   conexion: Conexion;
   sucursal: string;
   onSucursal: (id: string) => void;
+  version: number;
 }) {
-  const { cliente, sucursales, enPoder, recientes } = datos;
+  const { cliente, sucursales, enPoder } = datos;
   const hoy = diaEnChile();
   const nombreSucursal = useMemo(() => new Map(sucursales.map((s) => [s.id, s.nombre])), [sucursales]);
   const porSucursal = useMemo(() => {
@@ -147,13 +163,14 @@ function Ficha({
         </div>
       </div>
 
-      <section aria-label="Resumen" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+      <section aria-label="Resumen" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Indicador titulo="Cilindros en poder" valor={numero.format(enPoder.length)} />
         <Indicador titulo="Sucursales activas" valor={numero.format(activas)} />
         <Indicador
           titulo="Envase más antiguo"
           valor={masAntiguo === null ? '—' : masAntiguo === 0 ? 'Hoy' : `${numero.format(masAntiguo)} ${masAntiguo === 1 ? 'día' : 'días'}`}
         />
+        <ArriendoDelMes clienteId={cliente.id} version={version} />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
@@ -238,34 +255,10 @@ function Ficha({
             </p>
           </section>
 
-          <section className="rounded-lg border border-gris-200 bg-white shadow-sm">
-            <header className="flex items-baseline justify-between gap-4 border-b border-gris-200 px-5 py-4">
-              <h2 className="text-base font-bold text-gris-900">Últimos movimientos</h2>
-              <p className="text-xs text-gris-500">hasta {MOVIMIENTOS_RECIENTES}, más reciente arriba</p>
-            </header>
-            {recientes.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-gris-500">Todavía no hay entregas ni retiros registrados para este cliente.</p>
-            ) : (
-              <ul className="divide-y divide-gris-100">
-                {recientes.map((m) => (
-                  <li key={m.uuid_local} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5 text-sm">
-                    <span className="w-36 shrink-0 tabular-nums text-gris-700">{formatoFechaHora(m.fecha_evento)}</span>
-                    {m.tipo ? (
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${COLOR_TIPO[m.tipo]}`}>{NOMBRE_TIPO[m.tipo]}</span>
-                    ) : null}
-                    <a href={urlFicha(m.numero_serie)} className="font-medium text-azul-700 hover:underline">
-                      {m.numero_serie}
-                    </a>
-                    <span className="min-w-0 flex-1 truncate text-gris-500">
-                      {m.sucursal_nombre} · {m.tecnico_nombre} · {m.patente}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
         </div>
       </div>
+
+      <Historial clienteId={cliente.id} sucursales={sucursales} version={version} />
     </>
   );
 }
@@ -310,5 +303,194 @@ function TarjetaSucursal({ s, cilindros, elegida, onElegir }: { s: Sucursal; cil
         </dl>
       ) : null}
     </button>
+  );
+}
+
+const NOMBRE_MES = new Intl.DateTimeFormat('es-CL', { month: 'long', timeZone: 'UTC' });
+
+/**
+ * Arriendo devengado del mes en curso hasta hoy: el mismo cálculo del informe de arriendo
+ * (función de la base), resumido en días-envase. No son pesos: el valor se factura en KAME.
+ */
+function ArriendoDelMes({ clienteId, version }: { clienteId: string; version: number }) {
+  const [resumen, setResumen] = useState<{ dias: number; envases: number } | 'error' | null>(null);
+  const mes = mesActual();
+
+  useEffect(() => {
+    let vigente = true;
+    generarInforme(clienteId, periodoDelMes(mes))
+      .then((lineas) => vigente && setResumen(totales(lineas)))
+      .catch(() => vigente && setResumen('error'));
+    return () => {
+      vigente = false;
+    };
+  }, [clienteId, mes, version]);
+
+  const nombreMes = NOMBRE_MES.format(new Date(`${mes}-15T12:00:00Z`));
+  return (
+    <a
+      href={urlInforme(clienteId, mes)}
+      className="rounded-lg border border-azul-100 bg-azul-50 p-5 shadow-sm transition hover:border-azul-200"
+      title="Abrir el informe de arriendo de este mes"
+    >
+      <p className="text-xs font-semibold text-azul-700">Arriendo de {nombreMes} (hasta hoy)</p>
+      <p className="mt-2 text-3xl font-bold tabular-nums text-gris-900">
+        {resumen === null ? '…' : resumen === 'error' ? '—' : numero.format(resumen.dias)}
+        <span className="ml-1 text-sm font-semibold text-gris-500">días-envase</span>
+      </p>
+      <p className="mt-1 text-xs text-gris-500">
+        {resumen && resumen !== 'error' ? `${numero.format(resumen.envases)} envases retenidos · ver informe →` : 'Ver informe →'}
+      </p>
+    </a>
+  );
+}
+
+const FILTROS_INICIALES: FiltrosHistorial = { tipo: '', sucursalId: '', pagina: 0 };
+
+/** Historial completo de entregas y retiros del cliente, paginado y con filtros. */
+function Historial({ clienteId, sucursales, version }: { clienteId: string; sucursales: Sucursal[]; version: number }) {
+  const [filtros, setFiltros] = useState<FiltrosHistorial>(FILTROS_INICIALES);
+  const [datos, setDatos] = useState<{ filas: MovimientoCliente[]; total: number } | 'error' | null>(null);
+
+  useEffect(() => {
+    let vigente = true;
+    cargarHistorialCliente(clienteId, filtros)
+      .then((r) => vigente && setDatos(r))
+      .catch(() => vigente && setDatos('error'));
+    return () => {
+      vigente = false;
+    };
+  }, [clienteId, filtros, version]);
+
+  const total = datos && datos !== 'error' ? datos.total : 0;
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA_HISTORIAL));
+  const campo = 'rounded-md border border-gris-300 bg-white px-3 py-1.5 text-sm text-gris-900';
+
+  return (
+    <section className="rounded-lg border border-gris-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gris-200 px-5 py-4">
+        <div>
+          <h2 className="text-base font-bold text-gris-900">Historial de entregas y retiros</h2>
+          <p className="text-xs text-gris-500">
+            {datos && datos !== 'error' ? `${numero.format(total)} movimientos · más reciente arriba` : ' '}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            aria-label="Tipo"
+            className={campo}
+            value={filtros.tipo}
+            onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value as FiltrosHistorial['tipo'], pagina: 0 })}
+          >
+            <option value="">Entregas y retiros</option>
+            <option value="entrega">Solo entregas</option>
+            <option value="retiro">Solo retiros</option>
+          </select>
+          {sucursales.length > 1 ? (
+            <select
+              aria-label="Sucursal del historial"
+              className={campo}
+              value={filtros.sucursalId}
+              onChange={(e) => setFiltros({ ...filtros, sucursalId: e.target.value, pagina: 0 })}
+            >
+              <option value="">Todas las sucursales</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
+      </header>
+
+      {datos === null ? (
+        <p className="px-5 py-8 text-sm text-gris-500">Cargando…</p>
+      ) : datos === 'error' ? (
+        <p role="alert" className="m-5 rounded-md bg-error-fondo p-4 text-sm text-error">
+          No se pudo cargar el historial.
+        </p>
+      ) : datos.filas.length === 0 ? (
+        <p className="px-5 py-8 text-sm text-gris-500">
+          {filtros.tipo || filtros.sucursalId
+            ? 'Ningún movimiento coincide con los filtros.'
+            : 'Todavía no hay entregas ni retiros registrados para este cliente.'}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="text-xs uppercase tracking-wide text-gris-500">
+              <tr>
+                <th className="px-5 py-3 font-medium">Fecha y hora</th>
+                <th className="px-3 py-3 font-medium">Tipo</th>
+                <th className="px-3 py-3 font-medium">N° de serie</th>
+                <th className="px-3 py-3 font-medium">Sucursal</th>
+                <th className="px-3 py-3 font-medium">Técnico</th>
+                <th className="px-5 py-3 text-right font-medium">Folio</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gris-100">
+              {datos.filas.map((m) => (
+                <tr key={m.uuid_local} className="hover:bg-gris-50">
+                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-gris-700">{formatoFechaHora(m.fecha_evento)}</td>
+                  <td className="px-3 py-2.5">
+                    {m.tipo ? (
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${COLOR_TIPO[m.tipo]}`}>{NOMBRE_TIPO[m.tipo]}</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <a href={urlFicha(m.numero_serie)} className="font-medium text-azul-700 hover:underline">
+                      {m.numero_serie}
+                    </a>
+                    {m.codigo_origen === 'manual' ? (
+                      <span className="ml-2 text-xs text-alerta" title="Código ingresado a mano">
+                        manual
+                      </span>
+                    ) : null}
+                    <span className="block text-xs text-gris-500">{m.producto_nombre}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-gris-700">{m.sucursal_nombre}</td>
+                  <td className="px-3 py-2.5 text-gris-700">
+                    {m.tecnico_nombre}
+                    <span className="block text-xs text-gris-500">{m.patente}</span>
+                  </td>
+                  <td className="px-5 py-2.5 text-right tabular-nums text-gris-500">{m.folio_operacion ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {datos && datos !== 'error' && total > POR_PAGINA_HISTORIAL ? (
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-gris-200 px-5 py-3 text-sm text-gris-500">
+          <span>
+            {numero.format(filtros.pagina * POR_PAGINA_HISTORIAL + 1)}–
+            {numero.format(Math.min((filtros.pagina + 1) * POR_PAGINA_HISTORIAL, total))} de {numero.format(total)}
+          </span>
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={filtros.pagina === 0}
+              onClick={() => setFiltros({ ...filtros, pagina: filtros.pagina - 1 })}
+              className="rounded-md border border-gris-300 bg-white px-3 py-1.5 font-medium text-gris-700 hover:bg-gris-50 disabled:opacity-40"
+            >
+              ‹ Anteriores
+            </button>
+            <span className="tabular-nums">
+              {filtros.pagina + 1} / {paginas}
+            </span>
+            <button
+              type="button"
+              disabled={filtros.pagina + 1 >= paginas}
+              onClick={() => setFiltros({ ...filtros, pagina: filtros.pagina + 1 })}
+              className="rounded-md border border-gris-300 bg-white px-3 py-1.5 font-medium text-gris-700 hover:bg-gris-50 disabled:opacity-40"
+            >
+              Más antiguos ›
+            </button>
+          </span>
+        </footer>
+      ) : null}
+    </section>
   );
 }

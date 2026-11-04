@@ -100,18 +100,24 @@ export interface CilindroEnPoder {
 
 export type MovimientoCliente = Pick<
   Fila<'v_movimientos'>,
-  'uuid_local' | 'tipo' | 'fecha_evento' | 'numero_serie' | 'producto_nombre' | 'sucursal_nombre' | 'tecnico_nombre' | 'patente' | 'codigo_origen'
+  | 'uuid_local'
+  | 'tipo'
+  | 'fecha_evento'
+  | 'numero_serie'
+  | 'producto_nombre'
+  | 'sucursal_id'
+  | 'sucursal_nombre'
+  | 'tecnico_nombre'
+  | 'patente'
+  | 'codigo_origen'
+  | 'folio_operacion'
 >;
 
 export interface FichaCliente {
   cliente: Pick<Fila<'clientes'>, 'id' | 'nombre' | 'rut' | 'codigo_kame' | 'activo'>;
   sucursales: Sucursal[];
   enPoder: CilindroEnPoder[];
-  recientes: MovimientoCliente[];
 }
-
-/** Movimientos recientes que se muestran en la ficha. */
-export const MOVIMIENTOS_RECIENTES = 15;
 
 export async function cargarFichaCliente(id: string): Promise<FichaCliente | null> {
   const cliente = await supabase.from('clientes').select('id, nombre, rut, codigo_kame, activo').eq('id', id).maybeSingle();
@@ -131,32 +137,51 @@ export async function cargarFichaCliente(id: string): Promise<FichaCliente | nul
   if (sucursales.error) throw sucursales.error;
 
   const ids = sucursales.data.map((s) => s.id);
-  const [enPoder, recientes] = ids.length
-    ? await Promise.all([
-        supabase
-          .from('cilindros')
-          .select('id, numero_serie, en_cliente_desde, sucursal_actual_id, productos(nombre, codigo, envase_codigo)')
-          .eq('estado', 'en_cliente')
-          .in('sucursal_actual_id', ids)
-          .order('en_cliente_desde'),
-        supabase
-          .from('v_movimientos')
-          .select('uuid_local, tipo, fecha_evento, numero_serie, producto_nombre, sucursal_nombre, tecnico_nombre, patente, codigo_origen')
-          .eq('cliente_id', id)
-          .order('fecha_evento', { ascending: false })
-          .limit(MOVIMIENTOS_RECIENTES),
-      ])
-    : [
-        { data: [], error: null },
-        { data: [], error: null },
-      ];
+  const enPoder = ids.length
+    ? await supabase
+        .from('cilindros')
+        .select('id, numero_serie, en_cliente_desde, sucursal_actual_id, productos(nombre, codigo, envase_codigo)')
+        .eq('estado', 'en_cliente')
+        .in('sucursal_actual_id', ids)
+        .order('en_cliente_desde')
+    : { data: [], error: null };
   if (enPoder.error) throw enPoder.error;
-  if (recientes.error) throw recientes.error;
 
   return {
     cliente: cliente.data,
     sucursales: sucursales.data,
     enPoder: enPoder.data as CilindroEnPoder[],
-    recientes: recientes.data as MovimientoCliente[],
   };
+}
+
+// ------------------------------------------------------------------ historial del cliente
+
+/** Movimientos por página en el historial de la ficha. */
+export const POR_PAGINA_HISTORIAL = 25;
+
+export interface FiltrosHistorial {
+  tipo: 'entrega' | 'retiro' | '';
+  sucursalId: string;
+  pagina: number;
+}
+
+/**
+ * Entregas y retiros del cliente, del más reciente al más antiguo. Las cargas no tienen
+ * cliente (ocurren en planta), así que nunca aparecen aquí.
+ */
+export async function cargarHistorialCliente(clienteId: string, f: FiltrosHistorial) {
+  let consulta = supabase
+    .from('v_movimientos')
+    .select(
+      'uuid_local, tipo, fecha_evento, numero_serie, producto_nombre, sucursal_id, sucursal_nombre, tecnico_nombre, patente, codigo_origen, folio_operacion',
+      { count: 'exact' },
+    )
+    .eq('cliente_id', clienteId)
+    .order('fecha_evento', { ascending: false })
+    .range(f.pagina * POR_PAGINA_HISTORIAL, f.pagina * POR_PAGINA_HISTORIAL + POR_PAGINA_HISTORIAL - 1);
+  if (f.tipo) consulta = consulta.eq('tipo', f.tipo);
+  if (f.sucursalId) consulta = consulta.eq('sucursal_id', f.sucursalId);
+  const { data, count, error } = await consulta;
+  if (error) throw error;
+  return { filas: data as MovimientoCliente[], total: count ?? 0 };
 }

@@ -20,5 +20,49 @@ const { titulo, sesionPendiente = false } = Astro.props;
   </head>
   <body class="min-h-dvh">
     <slot />
+    {
+      sesionPendiente && (
+        <div data-aviso-carga role="alert" class="mx-auto mt-24 max-w-md rounded-lg border border-gris-200 bg-white p-6 shadow-sm">
+          <h2 class="text-lg font-bold text-gris-900">La página no terminó de cargar</h2>
+          <p class="mt-2 text-sm text-gris-700">
+            No se pudo confirmar tu sesión. Puede ser la conexión, o que la sesión guardada en este navegador ya no
+            sirva. Si estás probando en tu computador, revisa también la consola del navegador (F12).
+          </p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button type="button" data-recargar class="rounded-md border border-gris-300 bg-white px-3 py-2 text-sm font-medium text-gris-700 hover:bg-gris-50">
+              Recargar
+            </button>
+            <button type="button" data-reingresar class="rounded-md bg-azul-700 px-3 py-2 text-sm font-semibold text-white hover:bg-azul-800">
+              Volver a iniciar sesión
+            </button>
+          </div>
+        </div>
+      )
+    }
+    {
+      sesionPendiente && (
+        <script is:inline>
+          // Red de seguridad independiente de React y de supabase-js: si en 10 s la guardia no
+          // confirmó la sesión (sin conexión, sesión vencida que no se renueva, o un error al
+          // cargar el código), se muestra un aviso en vez de dejar la página en blanco.
+          setTimeout(function () {
+            if (document.documentElement.dataset.sesion === 'pendiente') document.documentElement.dataset.sesion = 'lenta';
+          }, 10000);
+          document.addEventListener('click', function (e) {
+            var t = e.target instanceof Element ? e.target : null;
+            if (!t) return;
+            if (t.closest('[data-recargar]')) location.reload();
+            if (t.closest('[data-reingresar]')) {
+              try {
+                Object.keys(localStorage)
+                  .filter(function (k) { return k.indexOf('sb-') === 0; })
+                  .forEach(function (k) { localStorage.removeItem(k); });
+              } catch (_) {}
+              location.replace('/login');
+            }
+          });
+        </script>
+      )
+    }
   </body>
 </html>

@@ -114,6 +114,7 @@ export type MovimientoHistorial = Pick<
   | 'fecha_sync'
   | 'codigo_origen'
   | 'folio_operacion'
+  | 'sucursal_id'
   | 'sucursal_nombre'
   | 'cliente_nombre'
   | 'tecnico_nombre'
@@ -126,7 +127,7 @@ export const MAXIMO_HISTORIAL = 500;
 export async function cargarHistorial(cilindroId: string): Promise<MovimientoHistorial[]> {
   const { data, error } = await supabase
     .from('v_movimientos')
-    .select('uuid_local, tipo, fecha_evento, fecha_sync, codigo_origen, folio_operacion, sucursal_nombre, cliente_nombre, tecnico_nombre, patente')
+    .select('uuid_local, tipo, fecha_evento, fecha_sync, codigo_origen, folio_operacion, sucursal_id, sucursal_nombre, cliente_nombre, tecnico_nombre, patente')
     .eq('cilindro_id', cilindroId)
     .order('fecha_evento', { ascending: false })
     .limit(MAXIMO_HISTORIAL);

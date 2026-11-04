@@ -12,4 +12,17 @@
   html[data-sesion='pendiente'] [data-panel] {
     visibility: hidden;
   }
+
+  /* Aviso si la sesión no se confirma (ver Base.astro): oculto salvo en ese caso. */
+  [data-aviso-carga] {
+    display: none;
+  }
+  html[data-sesion='lenta'] [data-aviso-carga] {
+    display: block;
+  }
+}
+
+/* Fuera de @layer para que gane a la clase `flex` del panel. */
+html[data-sesion='lenta'] [data-panel] {
+  display: none;
 }
