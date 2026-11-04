@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,7 +103,7 @@ export default function PantallaOperacion() {
     : 'carga') as TipoMovimiento;
 
   const { usuario, camion } = useSesion();
-  const { registrar, revision } = useSync();
+  const { registrar, revision, abrirVisita, finalizarVisita } = useSync();
 
   const necesitaCliente = tipo !== 'carga';
 
@@ -118,9 +118,10 @@ export default function PantallaOperacion() {
 
   const [registros, setRegistros] = useState<MovimientoDetallado[]>([]);
   const [incompleto, setIncompleto] = useState(false);
-  // Un despacho = los movimientos de esta pantalla en una misma sucursal. Al
-  // sincronizar se pide un solo folio para todos. Cambiar de sucursal (o salir
-  // de la pantalla) empieza otro. Las cargas no llevan despacho.
+  // Un despacho = la visita: los movimientos de esta pantalla en una misma
+  // sucursal. Se abre con el primer cilindro y se cierra al salir de la pantalla
+  // ("Finalizar" o atrás) o al cambiar de sucursal; recién ahí se pide su folio,
+  // uno para toda la visita. Las cargas no llevan despacho.
   const [despachoId, setDespachoId] = useState<string | null>(null);
   const [ultimo, setUltimo] = useState<{ movimiento: MovimientoDetallado; cilindro: Cilindro } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +143,19 @@ export default function PantallaOperacion() {
   useEffect(() => {
     setDespachoId(necesitaCliente && sucursal ? Crypto.randomUUID() : null);
   }, [necesitaCliente, sucursal?.id]);
+
+  // Cierra la visita cuando cambia el despacho (otra sucursal) o la pantalla se
+  // desmonta. Por ref: si el efecto dependiera de la función, un cambio de su
+  // identidad cerraría la visita a mitad de camino. Cerrar una visita sin
+  // cilindros no hace nada (no se abrió).
+  const finalizarVisitaRef = useRef(finalizarVisita);
+  finalizarVisitaRef.current = finalizarVisita;
+  useEffect(() => {
+    if (!despachoId) return;
+    return () => {
+      void finalizarVisitaRef.current(despachoId);
+    };
+  }, [despachoId]);
 
   useEffect(() => {
     if (!necesitaCliente) return;
@@ -286,9 +300,13 @@ export default function PantallaOperacion() {
         nombreSucursal: necesitaCliente ? (sucursal?.nombre ?? null) : null,
       };
 
+      if (movimiento.despachoId && sucursal) {
+        await abrirVisita({ despachoId: movimiento.despachoId, sucursalId: sucursal.id });
+      }
+
       // A la cola local (idempotente por uuidLocal) y, si hay señal, sale de
       // inmediato. Mientras no llegue, la proyección de la cola ya muestra el
-      // cilindro con su nuevo estado.
+      // cilindro con su nuevo estado. El folio espera a que se cierre la visita.
       await registrar(movimiento);
       await refrescar();
 

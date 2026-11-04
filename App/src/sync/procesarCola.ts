@@ -24,7 +24,12 @@
  * Un despacho no pide folio mientras alguno de sus movimientos siga
  * `pendiente`: la función exige que todos estén en el servidor y, si se numerara
  * una parte, el resto quedaría fuera de la llamada (ya se habría quitado de la
- * cola la parte numerada).
+ * cola la parte numerada). Tampoco mientras la visita siga ABIERTA (el técnico
+ * sigue en la pantalla de entrega o retiro): con señal cada cilindro sube apenas
+ * se escanea, y pedir folio en ese momento numeraría cada cilindro por separado.
+ * Los despachos sin registro de visita (filas de antes de este cambio) piden
+ * folio como siempre. Una visita cerrada se borra cuando ya no le queda ningún
+ * movimiento por enviar o por numerar.
  */
 
 import type { ErrorServidor } from '../datos/red';
@@ -105,13 +110,18 @@ export async function procesarCola(
 
   // Folios: se relee la cola porque el envío acaba de cambiar estados.
   const actual = (await cola.listar()).filter((m) => m.usuarioId === usuarioId);
+  const abiertos = new Set(
+    (await cola.listarDespachos())
+      .filter((d) => d.usuarioId === usuarioId && d.estado === 'abierto')
+      .map((d) => d.despachoId),
+  );
   const despachosConPendientes = new Set(
     actual.filter((m) => m.estadoEnvio === 'pendiente').map((m) => m.despachoId),
   );
   const porDespacho = new Map<Uuid, Uuid[]>();
   for (const m of actual) {
     if (m.estadoEnvio !== 'sin_folio' || m.errorEnvio !== null || m.despachoId === null) continue;
-    if (despachosConPendientes.has(m.despachoId)) continue;
+    if (despachosConPendientes.has(m.despachoId) || abiertos.has(m.despachoId)) continue;
     const grupo = porDespacho.get(m.despachoId) ?? [];
     grupo.push(m.uuidLocal);
     porDespacho.set(m.despachoId, grupo);
@@ -130,7 +140,29 @@ export async function procesarCola(
     }
   }
 
+  await quitarVisitasTerminadas(cola, usuarioId);
   return resultado;
+}
+
+/**
+ * Borra las visitas cerradas que ya no tienen movimientos por enviar o por
+ * numerar. Las filas con error que queden en la cola siguen visibles; sin
+ * registro de visita cuentan como cerradas, que es lo que son.
+ */
+async function quitarVisitasTerminadas(cola: ColaLocal, usuarioId: Uuid): Promise<void> {
+  const enCamino = new Set(
+    (await cola.listar())
+      .filter(
+        (m) =>
+          m.usuarioId === usuarioId &&
+          (m.estadoEnvio === 'pendiente' || (m.estadoEnvio === 'sin_folio' && m.errorEnvio === null)),
+      )
+      .map((m) => m.despachoId),
+  );
+  for (const d of await cola.listarDespachos()) {
+    if (d.usuarioId !== usuarioId || d.estado !== 'cerrado' || enCamino.has(d.despachoId)) continue;
+    await cola.quitarDespacho(d.despachoId);
+  }
 }
 
 /**

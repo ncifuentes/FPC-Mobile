@@ -19,6 +19,16 @@
  *    Queda visible con su error en vez de borrarse, y no bloquea al resto.
  * Cuando el movimiento ya está en el servidor y no necesita folio (o ya lo
  * tiene), se quita de la cola: desde ahí la verdad es el servidor.
+ *
+ * VISITAS (`DespachoLocal`). Una visita es la entrega o retiro en una sucursal
+ * desde que se escanea el primer cilindro hasta que el técnico sale de la
+ * pantalla (con "Finalizar", con el botón atrás o cambiando de sucursal).
+ * Mientras está ABIERTA no se pide folio: con señal, cada cilindro sube apenas se
+ * escanea, y pedir el folio en ese momento numeraría cada cilindro por separado.
+ * Al cerrarse se pide un solo folio para toda la visita. Si la app se cierra con
+ * una visita abierta, se cierra sola al volver a abrirla
+ * (`cerrarDespachosAbiertos`). Un despacho sin registro de visita (filas de antes
+ * de este cambio) cuenta como cerrado: pide folio como siempre.
  */
 
 import type { MovimientoNuevo, Uuid } from '../dominio/tipos';
@@ -29,6 +39,17 @@ export interface MovimientoEnCola extends MovimientoNuevo {
   estadoEnvio: EstadoEnvio;
   errorEnvio: string | null;
 }
+
+export type EstadoDespacho = 'abierto' | 'cerrado';
+
+export interface DespachoLocal {
+  despachoId: Uuid;
+  usuarioId: Uuid;
+  sucursalId: Uuid;
+  estado: EstadoDespacho;
+}
+
+export type DespachoNuevo = Pick<DespachoLocal, 'despachoId' | 'usuarioId' | 'sucursalId'>;
 
 export interface ConteoCola {
   /** Falta enviarlos o falta su folio, y se van a reintentar solos. */
@@ -50,13 +71,25 @@ export interface ColaLocal {
   anotarErrorFolio(uuidsLocales: Uuid[], error: string): Promise<void>;
   /** Ya están completos en el servidor. */
   quitar(uuidsLocales: Uuid[]): Promise<void>;
+
+  /** Idempotente por `despachoId`. */
+  abrirDespacho(despacho: DespachoNuevo): Promise<void>;
+  /** Solo cierra si sigue abierto. */
+  cerrarDespacho(despachoId: Uuid): Promise<void>;
+  /** Cierra las visitas abiertas del usuario (la app se cerró sin salir de la pantalla). */
+  cerrarDespachosAbiertos(usuarioId: Uuid): Promise<void>;
+  listarDespachos(): Promise<DespachoLocal[]>;
+  quitarDespacho(despachoId: Uuid): Promise<void>;
 }
 
-export function contarCola(items: MovimientoEnCola[]): ConteoCola {
+export function contarCola(items: MovimientoEnCola[], despachos: DespachoLocal[] = []): ConteoCola {
+  const abiertos = new Set(despachos.filter((d) => d.estado === 'abierto').map((d) => d.despachoId));
   let pendientes = 0;
   let conError = 0;
   for (const m of items) {
     if (m.estadoEnvio === 'rechazado' || m.errorEnvio !== null) conError += 1;
+    // Ya llegó y espera que se cierre la visita para pedir folio: no está atrasado.
+    else if (m.estadoEnvio === 'sin_folio' && m.despachoId !== null && abiertos.has(m.despachoId)) continue;
     else pendientes += 1;
   }
   return { pendientes, conError };
@@ -73,6 +106,7 @@ export function ordenarPorFecha<T extends { fechaEvento: string; uuidLocal: stri
 /** Cola en memoria: sólo para web y para pruebas. */
 export function crearColaMemoria(): ColaLocal {
   const items = new Map<string, MovimientoEnCola>();
+  const despachos = new Map<string, DespachoLocal>();
 
   function actualizar(uuids: Uuid[], cambio: Partial<MovimientoEnCola>) {
     for (const u of uuids) {
@@ -91,7 +125,7 @@ export function crearColaMemoria(): ColaLocal {
       return ordenarPorFecha(Array.from(items.values()));
     },
     async contar() {
-      return contarCola(Array.from(items.values()));
+      return contarCola(Array.from(items.values()), Array.from(despachos.values()));
     },
     async marcarSinFolio(uuids) {
       actualizar(uuids, { estadoEnvio: 'sin_folio', errorEnvio: null });
@@ -104,6 +138,26 @@ export function crearColaMemoria(): ColaLocal {
     },
     async quitar(uuids) {
       uuids.forEach((u) => items.delete(u));
+    },
+    async abrirDespacho(d) {
+      if (!despachos.has(d.despachoId)) despachos.set(d.despachoId, { ...d, estado: 'abierto' });
+    },
+    async cerrarDespacho(id) {
+      const d = despachos.get(id);
+      if (d?.estado === 'abierto') despachos.set(id, { ...d, estado: 'cerrado' });
+    },
+    async cerrarDespachosAbiertos(usuarioId) {
+      for (const d of despachos.values()) {
+        if (d.usuarioId === usuarioId && d.estado === 'abierto') {
+          despachos.set(d.despachoId, { ...d, estado: 'cerrado' });
+        }
+      }
+    },
+    async listarDespachos() {
+      return Array.from(despachos.values());
+    },
+    async quitarDespacho(id) {
+      despachos.delete(id);
     },
   };
 }

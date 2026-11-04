@@ -155,6 +155,8 @@ Hecho:
       operar sin señal (HU-03, HU-09)
 - [x] Cola offline en SQLite: los movimientos se envían solos al volver la señal, con
       `upsert` idempotente y folio de despacho asignado por el servidor (HU-06 a HU-08)
+- [x] Un folio por visita: los cilindros de una entrega o retiro en una sucursal comparten
+      un folio, que se pide al salir de la pantalla (no con cada cilindro escaneado)
 - [x] Estado de sincronización en Perfil: conexión, por enviar, rechazados, último envío,
       fecha del catálogo y botón «Sincronizar ahora»
 - [x] Visibilidad restringida con RLS: el técnico solo ve y registra sus propios
@@ -165,6 +167,7 @@ Pruebas (desde la raíz del repositorio):
 ```bash
 node supabase/pruebas/prueba_sync_local.mjs        # ciclo de envío, sin red
 node supabase/pruebas/prueba_sync_movimientos.mjs  # contra Supabase, requiere .env y link
+node supabase/pruebas/prueba_folio_visita.mjs      # un folio por visita, contra Supabase
 ```
 
 En pausa (rama `feat/comprobantes`):
@@ -172,8 +175,6 @@ En pausa (rama `feat/comprobantes`):
 - [ ] **Comprobante de visita por correo.** Al finalizar la visita se confirma o se pide el
       correo del cliente, y el comprobante sale por correo con Resend. La base y la función
       `enviar-comprobante` ya están en producción; falta que FPC defina el dominio remitente.
-- [ ] **Un folio por visita.** Hoy, con señal, cada cilindro de una misma visita recibe un
-      folio distinto. El arreglo está en la misma rama.
 
 Pendiente:
 
