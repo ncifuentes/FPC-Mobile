@@ -18,7 +18,14 @@
 
 import * as SQLite from 'expo-sqlite';
 
-import { contarCola, type ColaLocal, type EstadoEnvio, type MovimientoEnCola } from './colaMemoria';
+import {
+  contarCola,
+  type ColaLocal,
+  type DespachoLocal,
+  type EstadoDespacho,
+  type EstadoEnvio,
+  type MovimientoEnCola,
+} from './colaMemoria';
 
 export type { ColaLocal };
 
@@ -35,6 +42,12 @@ CREATE TABLE IF NOT EXISTS movimientos_pendientes (
   camion_id     TEXT NOT NULL,
   fecha_evento  TEXT NOT NULL,
   origen_codigo TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS despachos_locales (
+  despacho_id TEXT PRIMARY KEY NOT NULL,
+  usuario_id  TEXT NOT NULL,
+  sucursal_id TEXT NOT NULL,
+  estado      TEXT NOT NULL DEFAULT 'abierto'
 );
 `;
 
@@ -77,6 +90,22 @@ type FilaCola = {
   nombre_cliente: string | null;
   nombre_sucursal: string | null;
 };
+
+type FilaDespacho = {
+  despacho_id: string;
+  usuario_id: string;
+  sucursal_id: string;
+  estado: string;
+};
+
+function aDespacho(f: FilaDespacho): DespachoLocal {
+  return {
+    despachoId: f.despacho_id,
+    usuarioId: f.usuario_id,
+    sucursalId: f.sucursal_id,
+    estado: f.estado as EstadoDespacho,
+  };
+}
 
 function aMovimiento(f: FilaCola): MovimientoEnCola {
   return {
@@ -148,6 +177,12 @@ function crearColaSqlite(): ColaLocal {
     return filas.map(aMovimiento);
   }
 
+  async function listarDespachos(): Promise<DespachoLocal[]> {
+    const db = await conexion();
+    const filas = await db.getAllAsync<FilaDespacho>('SELECT * FROM despachos_locales');
+    return filas.map(aDespacho);
+  }
+
   return {
     async encolar(m) {
       const db = await conexion();
@@ -173,7 +208,7 @@ function crearColaSqlite(): ColaLocal {
     },
     listar,
     async contar() {
-      return contarCola(await listar());
+      return contarCola(await listar(), await listarDespachos());
     },
     async marcarSinFolio(uuids) {
       await actualizar(uuids, "estado_envio = 'sin_folio', error_envio = NULL", []);
@@ -192,6 +227,34 @@ function crearColaSqlite(): ColaLocal {
         `DELETE FROM movimientos_pendientes WHERE uuid_local IN (${marcas})`,
         ...uuids,
       );
+    },
+    async abrirDespacho(d) {
+      const db = await conexion();
+      await db.runAsync(
+        'INSERT OR IGNORE INTO despachos_locales (despacho_id, usuario_id, sucursal_id) VALUES (?, ?, ?)',
+        d.despachoId,
+        d.usuarioId,
+        d.sucursalId,
+      );
+    },
+    async cerrarDespacho(id) {
+      const db = await conexion();
+      await db.runAsync(
+        "UPDATE despachos_locales SET estado = 'cerrado' WHERE despacho_id = ? AND estado = 'abierto'",
+        id,
+      );
+    },
+    async cerrarDespachosAbiertos(usuarioId) {
+      const db = await conexion();
+      await db.runAsync(
+        "UPDATE despachos_locales SET estado = 'cerrado' WHERE usuario_id = ? AND estado = 'abierto'",
+        usuarioId,
+      );
+    },
+    listarDespachos,
+    async quitarDespacho(id) {
+      const db = await conexion();
+      await db.runAsync('DELETE FROM despachos_locales WHERE despacho_id = ?', id);
     },
   };
 }

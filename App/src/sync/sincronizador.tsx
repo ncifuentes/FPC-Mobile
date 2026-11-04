@@ -8,7 +8,9 @@
  *    técnico tiene que verlo: si no, no sabe que su jornada todavía no llegó);
  *  - reintentar solo: al volver la conexión, al volver la app al frente y,
  *    mientras quede algo pendiente con señal, cada `REINTENTO_MS`;
- *  - mantener al día el respaldo de catálogo para operar sin señal.
+ *  - mantener al día el respaldo de catálogo para operar sin señal;
+ *  - abrir y cerrar las visitas a una sucursal: el folio se pide una vez por
+ *    visita, al cerrarla (ver `colaMemoria.ts`).
  *
  * Solo envía con sesión activa de Supabase y del mismo usuario que registró. El
  * ciclo de envío y folio vive en `procesarCola.ts`; acá solo se adapta a
@@ -56,6 +58,10 @@ interface EstadoSync {
   revision: number;
   /** Registra el movimiento: lo deja en la cola local e intenta enviarlo. */
   registrar(movimiento: MovimientoNuevo): Promise<void>;
+  /** Abre la visita a una sucursal (idempotente). Va antes del primer `registrar` de la visita. */
+  abrirVisita(visita: { despachoId: Uuid; sucursalId: Uuid }): Promise<void>;
+  /** Cierra la visita: desde ahí se pide su folio, uno para toda la visita. */
+  finalizarVisita(despachoId: Uuid): Promise<void>;
   /** Fuerza un intento de envío. */
   sincronizar(): Promise<void>;
   /** Vuelve a bajar el catálogo aunque esté reciente. `false` si no se pudo. */
@@ -215,11 +221,33 @@ export function ProveedorSync({
     [usuarioId, refrescarConteo, sincronizar],
   );
 
-  // Al montar y al cambiar de usuario (recién autenticado): conteo, red,
-  // envío y catálogo.
+  const abrirVisita = useCallback(
+    async (visita: { despachoId: Uuid; sucursalId: Uuid }) => {
+      if (!usuarioId) throw new Error('No hay sesión iniciada: no se puede registrar la visita.');
+      await colaLocal.abrirDespacho({ ...visita, usuarioId });
+    },
+    [usuarioId],
+  );
+
+  const finalizarVisita = useCallback(
+    async (despachoId: Uuid) => {
+      await colaLocal.cerrarDespacho(despachoId);
+      await refrescarConteo();
+      void sincronizar();
+    },
+    [refrescarConteo, sincronizar],
+  );
+
+  // Al montar y al cambiar de usuario (recién autenticado): visitas que
+  // quedaron abiertas, conteo, red, envío y catálogo. Una visita abierta a esta
+  // altura es de una ejecución anterior (la app se cerró con la pantalla de
+  // entrega o retiro abierta): se cierra para que reciba su folio.
   useEffect(() => {
     let vivo = true;
-    void refrescarConteo();
+    const cerradas = usuarioId
+      ? colaLocal.cerrarDespachosAbiertos(usuarioId).catch(() => undefined)
+      : Promise.resolve();
+    void cerradas.then(() => refrescarConteo());
     setUltimaSync(null);
     if (usuarioId) {
       // Si un envío terminó antes de leer lo guardado, gana el más reciente.
@@ -230,7 +258,8 @@ export function ProveedorSync({
     void cacheCatalogo.leer().then((actual) => {
       if (vivo) setCatalogoActualizado(actual ? new Date(actual.fecha) : null);
     });
-    void hayRedSegunSistema().then((conectado) => {
+    void hayRedSegunSistema().then(async (conectado) => {
+      await cerradas;
       if (!vivo) return;
       fijarEnLinea(conectado);
       setEnLinea(conectado);
@@ -295,6 +324,8 @@ export function ProveedorSync({
       actualizandoCatalogo,
       revision,
       registrar,
+      abrirVisita,
+      finalizarVisita,
       sincronizar,
       actualizarCatalogo,
     }),
@@ -308,6 +339,8 @@ export function ProveedorSync({
       actualizandoCatalogo,
       revision,
       registrar,
+      abrirVisita,
+      finalizarVisita,
       sincronizar,
       actualizarCatalogo,
     ],
