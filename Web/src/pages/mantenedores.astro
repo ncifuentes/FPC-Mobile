@@ -1,0 +1,7 @@
+---
+import Panel from '../layouts/Panel.astro';
+import Mantenedores from '../components/mantenedores/Mantenedores';
+---
+<Panel titulo="Gestión" seccion="mantenedores">
+  <Mantenedores client:only="react" />
+</Panel>

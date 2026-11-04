@@ -364,6 +364,16 @@ export type Database = {
       };
     };
     Functions: {
+      cuentas_de_acceso: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          correo: string;
+          creada_en: string;
+          id: string;
+          tiene_perfil: boolean;
+          ultimo_ingreso: string | null;
+        }[];
+      };
       informe_envases_arrendados: {
         Args: {
           p_cliente_id: string;
