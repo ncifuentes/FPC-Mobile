@@ -79,7 +79,7 @@ function resolverRaizRepo() {
 const RAIZ_REPO = resolverRaizRepo();
 
 function dbQuery(sql) {
-  const comando = `npx supabase db query --linked "${sql.replace(/"/g, '\\"')}"`;
+  const comando = `npx supabase db query --remote --yes "${sql.replace(/"/g, '\\"')}"`;
   const salida = execSync(comando, { cwd: RAIZ_REPO, encoding: 'utf8' });
   return JSON.parse(salida.slice(salida.indexOf('{')));
 }
