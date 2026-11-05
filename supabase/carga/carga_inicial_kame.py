@@ -25,6 +25,9 @@ Reglas de cruce (acordadas el 05-11-2026):
   * Series: coincidencia exacta con serie_normalizada; si no hay, coincidencia ÚNICA por prefijo
     o sin ceros a la izquierda. Lo ambiguo no se ubica: va al reporte.
   * Cilindros con movimientos no se tocan: el trigger manda sobre ellos.
+  * La ubicación se escribe como saldo inicial (`saldos_iniciales`, migración 20261105120000):
+    el trigger de esa tabla deja el cilindro en_cliente y la ubicación sobrevive a que se borre
+    un movimiento posterior. El informe de arriendo cuenta el saldo como una entrega en `desde`.
   * Un cilindro sin cliente en el archivo queda como está.
 """
 from __future__ import annotations
@@ -392,6 +395,11 @@ def sql_literal(v):
     return 'null' if v is None or v == '' else "'" + str(v).replace("'", "''") + "'"
 
 
+def origen_saldo(desde):
+    d = date.fromisoformat(desde)
+    return f'carga inicial KAME {d:%d-%m-%Y}'
+
+
 def generar_sql(res, desde):
     """SQL idempotente en una transacción. Solo escribe donde hay diferencia."""
     l = ['-- Carga inicial KAME: códigos de cliente, clientes faltantes y ubicación de cilindros.',
@@ -418,19 +426,22 @@ def generar_sql(res, desde):
         l.append('join public.clientes c on c.rut = v.rut')
         l.append('where not exists (select 1 from public.sucursales s where s.cliente_id = c.id)')
         l.append('on conflict (cliente_id, nombre) do nothing;\n')
-    filas = [r for r in res['a_ubicar'] if not r['sin_cambio']]
+    filas = res['a_ubicar']
     if filas:
-        l.append('-- 3. ubicación de cilindros SIN movimientos (sucursal principal del cliente)')
-        l.append('update public.cilindros k')
-        l.append(f"   set estado = 'en_cliente', sucursal_actual_id = s.id, en_cliente_desde = ({sql_literal(desde)}::timestamp at time zone 'America/Santiago')")
+        # Desde la migración 20261105120000 la ubicación de partida vive en saldos_iniciales y el
+        # trigger de esa tabla fija el estado del cilindro. Se inserta también para los que ya
+        # estaban bien ubicados: on conflict lo vuelve idempotente.
+        l.append('-- 3. saldo inicial de cilindros SIN movimientos (sucursal principal del cliente)')
+        l.append('insert into public.saldos_iniciales (cilindro_id, sucursal_id, desde, origen)')
+        l.append(f"select k.id, s.id, ({sql_literal(desde)}::timestamp at time zone 'America/Santiago'), {sql_literal(origen_saldo(desde))}")
         l.append('  from (values')
         l.append(',\n'.join(f"  ({sql_literal(r['serie_base'])}, {sql_literal(r['rut'])})" for r in filas))
         l.append(') v(serie, rut)')
+        l.append('  join public.cilindros k on k.numero_serie = v.serie')
         l.append('  join public.clientes c on c.rut = v.rut')
         l.append('  join public.sucursales s on s.cliente_id = c.id and s.activo and s.es_principal')
-        l.append(' where k.numero_serie = v.serie')
-        l.append('   and not exists (select 1 from public.movimientos m where m.cilindro_id = k.id)')
-        l.append('   and k.sucursal_actual_id is distinct from s.id;\n')
+        l.append(' where not exists (select 1 from public.movimientos m where m.cilindro_id = k.id)')
+        l.append('on conflict (cilindro_id) do nothing;\n')
     # Guarda final: si el estado resultante no es el esperado, la transacción completa se revierte.
     n_cli = len(res['cambios_clientes']) + len(res['nuevos'])
     n_cil = len(res['a_ubicar'])
@@ -442,7 +453,8 @@ def generar_sql(res, desde):
     l.append(f"  select count(*) into v_suc from public.sucursales s join public.clientes c on c.id = s.cliente_id"
              f" where s.es_principal and s.nombre = '{NOMBRE_SUCURSAL}' and c.rut in ({nuevos or 'null'});")
     series = ', '.join(sql_literal(r['serie_base']) for r in res['a_ubicar'])
-    l.append(f"  select count(*) into v_cil from public.cilindros where estado = 'en_cliente' and numero_serie in ({series or 'null'});")
+    l.append(f"  select count(*) into v_cil from public.cilindros k join public.saldos_iniciales si on si.cilindro_id = k.id"
+             f" where k.estado = 'en_cliente' and k.sucursal_actual_id = si.sucursal_id and k.numero_serie in ({series or 'null'});")
     l.append(f"  if v_cli <> {n_cli} or v_suc <> {len(res['nuevos'])} or v_cil <> {n_cil} then")
     l.append(f"    raise exception 'Carga inconsistente: clientes % de {n_cli}, sucursales % de {len(res['nuevos'])}, cilindros % de {n_cil}', v_cli, v_suc, v_cil;")
     l.append('  end if;')
