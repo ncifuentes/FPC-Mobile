@@ -41,9 +41,10 @@ export async function preguntar(historial: MensajeChat[]): Promise<MensajeChat> 
 
 async function traducirError(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
-    const cuerpo = await (error.context as Response).json().catch(() => null);
+    const respuesta = error.context as Response;
+    if (respuesta.status === 401) return 'Tu sesión venció o se cerró. Recarga la página y vuelve a iniciar sesión.';
+    const cuerpo = await respuesta.json().catch(() => null);
     if (cuerpo?.error) return String(cuerpo.error);
-    if ((error.context as Response).status === 401) return 'Tu sesión venció. Recarga la página para volver a entrar.';
   }
   if (error instanceof FunctionsFetchError) return 'No se pudo conectar con el asistente. Revisa tu conexión.';
   return 'El asistente no está disponible en este momento. Intenta de nuevo.';
