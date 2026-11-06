@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type SubmitEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type SubmitEvent } from 'react';
 import { obtenerPerfil, type Perfil } from '../lib/sesion';
 import { preguntar, type MensajeChat } from '../lib/asistente';
+import AvatarUsuario from './AvatarUsuario';
 import { botonPrimario, botonSecundario, claseCampo } from './mantenedores/ui';
 import TextoConFormato from './TextoConFormato';
 
@@ -121,12 +122,14 @@ export default function AsistenteChat() {
               </ul>
             </div>
           ) : (
-            mensajes.map((m, i) => <Burbuja key={i} mensaje={m} />)
+            mensajes.map((m, i) => <Burbuja key={i} mensaje={m} perfil={perfil} />)
           )}
           {pensando ? (
-            <p role="status" className="self-start rounded-lg bg-gris-50 px-4 py-3 text-sm text-gris-500">
-              Pensando…
-            </p>
+            <FilaAgente>
+              <p role="status" className="w-fit rounded-lg bg-gris-50 px-4 py-3 text-sm text-gris-500">
+                Pensando…
+              </p>
+            </FilaAgente>
           ) : null}
           <div ref={fin} />
         </div>
@@ -161,29 +164,73 @@ export default function AsistenteChat() {
   );
 }
 
-function Burbuja({ mensaje }: { mensaje: MensajeChat }) {
+/** Imagen del asistente (40 px, y el doble para pantallas retina). Si no carga, un círculo con «F». */
+function AvatarAgente() {
+  const [fallo, setFallo] = useState(false);
+  if (fallo) {
+    return (
+      <span
+        role="img"
+        aria-label="Asistente FPC"
+        className="grid size-10 shrink-0 place-items-center rounded-full bg-azul-700 text-sm font-bold text-white"
+      >
+        F
+      </span>
+    );
+  }
+  return (
+    <img
+      src="/agente-avatar-80.webp"
+      srcSet="/agente-avatar-80.webp 1x, /agente-avatar-160.webp 2x"
+      width={40}
+      height={40}
+      alt="Asistente FPC"
+      loading="lazy"
+      decoding="async"
+      onError={() => setFallo(true)}
+      className="size-10 shrink-0 rounded-full object-cover"
+    />
+  );
+}
+
+/** Fila del asistente: avatar a la izquierda, alineado con el borde superior de la burbuja. */
+function FilaAgente({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex max-w-[92%] items-start gap-3 self-start">
+      <AvatarAgente />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function Burbuja({ mensaje, perfil }: { mensaje: MensajeChat; perfil: Perfil }) {
   if (mensaje.rol === 'usuario') {
     return (
-      <div className="max-w-[85%] self-end whitespace-pre-wrap rounded-lg bg-azul-700 px-4 py-3 text-sm text-white">
-        {mensaje.texto}
+      <div className="flex max-w-[88%] items-start gap-3 self-end">
+        <div className="min-w-0 whitespace-pre-wrap break-words rounded-lg bg-azul-700 px-4 py-3 text-sm text-white">
+          {mensaje.texto}
+        </div>
+        <AvatarUsuario nombre={perfil.nombre} correo={perfil.correo} tamano="size-10" />
       </div>
     );
   }
   if (mensaje.error) {
     return (
-      <p role="alert" className="max-w-[85%] self-start rounded-lg bg-error-fondo px-4 py-3 text-sm text-error">
-        {mensaje.texto}
-      </p>
+      <FilaAgente>
+        <p role="alert" className="rounded-lg bg-error-fondo px-4 py-3 text-sm text-error">
+          {mensaje.texto}
+        </p>
+      </FilaAgente>
     );
   }
   return (
-    <div className="max-w-[90%] self-start">
-      <div className="rounded-lg bg-gris-50 px-4 py-3">
+    <FilaAgente>
+      <div className="overflow-x-auto rounded-lg bg-gris-50 px-4 py-3">
         <TextoConFormato texto={mensaje.texto} />
       </div>
       {mensaje.herramientas?.length ? (
         <p className="mt-1 px-1 text-xs text-gris-500">Consultó: {mensaje.herramientas.join(', ')}</p>
       ) : null}
-    </div>
+    </FilaAgente>
   );
 }
