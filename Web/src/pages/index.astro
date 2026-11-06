@@ -1,7 +1,8 @@
 ---
 import Panel from '../layouts/Panel.astro';
-import ResumenInicio from '../components/ResumenInicio';
+import AsistenteChat from '../components/AsistenteChat';
+// ResumenInicio repetía el Tablero del día; Inicio ahora muestra el asistente de IA (prototipo).
 ---
 <Panel titulo="Inicio" seccion="inicio">
-  <ResumenInicio client:only="react" />
+  <AsistenteChat client:only="react" />
 </Panel>
