@@ -43,9 +43,10 @@ export interface PeticionModelo {
   senal: AbortSignal;
 }
 
+/** `modelo`: el modelo que respondió de verdad (puede ser el de respaldo). */
 export type RespuestaModelo =
-  | { tipo: 'texto'; texto: string; crudo?: unknown }
-  | { tipo: 'herramientas'; llamadas: LlamadaHerramienta[]; texto?: string; crudo?: unknown };
+  | { tipo: 'texto'; texto: string; crudo?: unknown; modelo?: string }
+  | { tipo: 'herramientas'; llamadas: LlamadaHerramienta[]; texto?: string; crudo?: unknown; modelo?: string };
 
 export interface Proveedor {
   nombre: string;

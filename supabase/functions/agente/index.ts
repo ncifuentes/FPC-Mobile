@@ -5,7 +5,7 @@
  * FIJAS de solo lectura (./herramientas). No hay SQL generado por el modelo ni base vectorial.
  *
  * Cuerpo: `{ mensajes: [{ rol: 'usuario' | 'asistente', texto }] }` (se usan los últimos 10).
- * Respuesta 200: `{ respuesta, herramientas_usadas: [{ nombre, argumentos }] }`.
+ * Respuesta 200: `{ respuesta, herramientas_usadas: [{ nombre, argumentos }], modelo }`.
  * Errores: 400 cuerpo inválido · 401 sin sesión · 403 rol no permitido · 429 proveedor ocupado ·
  * 503 asistente sin configurar · 504 tiempo agotado · 502 otra falla del proveedor.
  *
@@ -17,7 +17,8 @@
  *    cantidades. Ninguna herramienta selecciona RUT, teléfonos, correos ni direcciones.
  *  - No se guardan conversaciones. Los registros solo tienen herramientas usadas, duración y estado.
  *
- * Secretos: GEMINI_API_KEY, AGENTE_MODELO (opcional), AGENTE_PROVEEDOR (opcional, `gemini`).
+ * Secretos: GEMINI_API_KEY, AGENTE_MODELO (opcional, por defecto gemini-3.5-flash-lite) y
+ * AGENTE_PROVEEDOR (opcional, `gemini`).
  * SUPABASE_URL y SUPABASE_ANON_KEY los inyecta Supabase.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -48,8 +49,8 @@ function responder(cuerpo: Record<string, unknown>, status = 200): Response {
 }
 
 /** Registro sin contenido: solo qué herramientas se usaron, cuánto tardó y cómo terminó. */
-function registrar(estado: string, inicio: number, herramientas: string[]): void {
-  console.log(JSON.stringify({ evento: 'agente', estado, ms: Date.now() - inicio, herramientas }));
+function registrar(estado: string, inicio: number, herramientas: string[], modelo?: string): void {
+  console.log(JSON.stringify({ evento: 'agente', estado, ms: Date.now() - inicio, herramientas, modelo }));
 }
 
 function leerMensajes(cuerpo: unknown): Mensaje[] | null {
@@ -104,6 +105,7 @@ Deno.serve(async (req) => {
   // ---------------------------------------------------------------- ciclo modelo → herramientas
   const usadas: { nombre: string; argumentos: Record<string, unknown> }[] = [];
   const nombresUsados = () => usadas.map((u) => u.nombre);
+  let modelo: string | undefined;
   const control = new AbortController();
   const reloj = setTimeout(() => control.abort(), TIEMPO_LIMITE_MS);
 
@@ -125,9 +127,10 @@ Deno.serve(async (req) => {
         senal: control.signal,
       });
 
+      modelo = r.modelo ?? modelo;
       if (r.tipo === 'texto') {
-        registrar('ok', inicio, nombresUsados());
-        return responder({ respuesta: r.texto, herramientas_usadas: usadas });
+        registrar('ok', inicio, nombresUsados(), modelo);
+        return responder({ respuesta: r.texto, herramientas_usadas: usadas, modelo });
       }
 
       mensajes.push({ rol: 'modelo', texto: r.texto, llamadas: r.llamadas, crudo: r.crudo });
@@ -156,10 +159,11 @@ Deno.serve(async (req) => {
       mensajes.push({ rol: 'herramientas', resultados });
     }
 
-    registrar('sin_respuesta', inicio, nombresUsados());
+    registrar('sin_respuesta', inicio, nombresUsados(), modelo);
     return responder({
       respuesta: 'No logré armar una respuesta con las consultas disponibles. Intenta con una pregunta más específica.',
       herramientas_usadas: usadas,
+      modelo,
     });
   } catch (e) {
     if (control.signal.aborted) {

@@ -7,10 +7,11 @@
  */
 import type { Proveedor } from './tipos.ts';
 import { ErrorProveedor } from './tipos.ts';
+import { crearGemini } from './gemini.ts';
 
 const PROVEEDORES: Record<string, () => Proveedor> = {
-  // gemini: crearGemini,   (Fase 2)
-  // claude: crearClaude,   (futuro)
+  gemini: crearGemini,
+  // claude: crearClaude,   (futuro: proveedores/claude.ts)
 };
 
 export function obtenerProveedor(): Proveedor {
