@@ -132,6 +132,7 @@ try {
     console.log(`  delete from movimientos where uuid_local = '${uuidPrueba}';`);
   }
   await a.removeAllChannels(); await b.removeAllChannels();
-  await a.auth.signOut(); await b.auth.signOut();
+  // Cierre local: el global (predeterminado) revocaría también las sesiones reales de la app.
+  await a.auth.signOut({ scope: 'local' }); await b.auth.signOut({ scope: 'local' });
   process.exit(0);
 }
