@@ -108,24 +108,46 @@ function celdas(fila: string): string[] {
   return fila.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 }
 
-/** Negrita (**texto**) y código (`texto`) dentro de una línea. */
+/**
+ * Formato dentro de una línea: código (`texto`), negrita (**texto**) y cursiva (*texto* o _texto_).
+ * Un marcador solo cuenta si va pegado al texto que encierra: «5 * 3» o «a*b» quedan tal cual, y
+ * _ dentro de una palabra (ranking_clientes) no abre cursiva.
+ */
+const EN_LINEA = new RegExp(
+  [
+    '`([^`]+)`',
+    '\\*\\*(?=\\S)(.+?)(?<=\\S)\\*\\*',
+    '(?<![*\\p{L}\\p{N}])\\*(?=[^\\s*])(.+?)(?<=[^\\s*])\\*(?![*\\p{L}\\p{N}])',
+    '(?<![_\\p{L}\\p{N}])_(?=[^\\s_])(.+?)(?<=[^\\s_])_(?![_\\p{L}\\p{N}])',
+  ].join('|'),
+  'gu',
+);
+
 function enLinea(texto: string): ReactNode[] {
-  const partes = texto.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return partes.map((p, i) => {
-    if (p.startsWith('**') && p.endsWith('**') && p.length > 4) {
-      return (
-        <strong key={i} className="font-semibold">
-          {p.slice(2, -2)}
-        </strong>
+  const salida: ReactNode[] = [];
+  let desde = 0;
+  for (const m of texto.matchAll(EN_LINEA)) {
+    const inicio = m.index ?? 0;
+    if (inicio > desde) salida.push(texto.slice(desde, inicio));
+    const [, codigo, negrita, cursivaAsterisco, cursivaGuion] = m;
+    const k = salida.length;
+    if (codigo !== undefined) {
+      salida.push(
+        <code key={k} className="rounded-sm bg-gris-100 px-1 text-[0.85em]">
+          {codigo}
+        </code>,
       );
-    }
-    if (p.startsWith('`') && p.endsWith('`') && p.length > 2) {
-      return (
-        <code key={i} className="rounded-sm bg-gris-100 px-1 text-[0.85em]">
-          {p.slice(1, -1)}
-        </code>
+    } else if (negrita !== undefined) {
+      salida.push(
+        <strong key={k} className="font-semibold">
+          {enLinea(negrita)}
+        </strong>,
       );
+    } else {
+      salida.push(<em key={k}>{enLinea(cursivaAsterisco ?? cursivaGuion ?? '')}</em>);
     }
-    return p;
-  });
+    desde = inicio + m[0].length;
+  }
+  if (desde < texto.length) salida.push(texto.slice(desde));
+  return salida;
 }
