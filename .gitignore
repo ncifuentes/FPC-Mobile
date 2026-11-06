@@ -5,3 +5,4 @@
 supabase/.temp/
 .vscode/
 .vs/
+supabase/pruebas/node_modules/

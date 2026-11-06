@@ -1,0 +1,8 @@
+{
+  "name": "fpc-mobile-pruebas-supabase",
+  "private": true,
+  "description": "Dependencias de las pruebas en Node contra Supabase (supabase/pruebas/*.mjs). Antes se tomaban de App/node_modules.",
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0"
+  }
+}
