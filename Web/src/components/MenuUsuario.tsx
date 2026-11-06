@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cerrarSesion, NOMBRE_ROL, obtenerPerfil, type Perfil } from '../lib/sesion';
+import AvatarUsuario from './AvatarUsuario';
 
 /** Nombre, rol y botón para cerrar sesión, en la barra superior del panel. */
 export default function MenuUsuario() {
@@ -12,24 +13,13 @@ export default function MenuUsuario() {
 
   if (!perfil) return null;
 
-  const iniciales = perfil.nombre
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((palabra) => palabra[0]?.toUpperCase() ?? '')
-    .join('');
-
   return (
     <div className="flex items-center gap-3">
       <div className="hidden text-right sm:block">
         <p className="text-sm font-semibold text-gris-900">{perfil.nombre}</p>
         <p className="text-xs text-gris-500">{NOMBRE_ROL[perfil.rol]}</p>
       </div>
-      <span
-        aria-hidden="true"
-        className="grid size-9 place-items-center rounded-full bg-azul-100 text-sm font-bold text-azul-700"
-      >
-        {iniciales}
-      </span>
+      <AvatarUsuario nombre={perfil.nombre} correo={perfil.correo} />
       <button
         type="button"
         onClick={() => {

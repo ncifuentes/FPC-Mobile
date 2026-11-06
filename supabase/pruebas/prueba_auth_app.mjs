@@ -18,8 +18,7 @@
  *   1. Copiar `.env.example` a `.env` en esta carpeta y completar las ocho
  *      variables, incluida una cuenta en `auth.users` SIN fila en
  *      `public.usuarios` (`SINFILA_EMAIL`/`SINFILA_PASSWORD`) para el caso 3.
- *   2. `npm i @supabase/supabase-js` (en cualquier carpeta con `node_modules`
- *      en su ruta; este archivo no trae uno propio).
+ *   2. `npm install` en `supabase/pruebas` (trae su propio package.json).
  *   3. `node prueba_auth_app.mjs`, con `npx supabase link --project-ref
  *      <ref>` ya hecho: el caso 4 corre `supabase db query --linked` para
  *      inhabilitar y restaurar a `prueba.b` temporalmente.
@@ -199,17 +198,17 @@ async function resolverUsuario(supabase, storage, authUserId) {
 
   if (error) {
     if (esErrorDeRed(error.message)) throw new ErrorRed(error.message);
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     await cacheBorrar(storage);
     throw new Error('No se pudo verificar tu cuenta. Intenta de nuevo.');
   }
   if (!data) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     await cacheBorrar(storage);
     throw new Error('Tu cuenta no está habilitada en el sistema. Contacta al administrador.');
   }
   if (!data.activo) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     await cacheBorrar(storage);
     throw new Error('Tu cuenta está deshabilitada. Contacta al administrador.');
   }
@@ -231,8 +230,11 @@ async function iniciarSesion(supabase, storage, correo, clave) {
   return resolverUsuario(supabase, storage, data.user.id);
 }
 
+// Diferencia deliberada con la app: acá los cierres de sesión son locales. El global
+// (predeterminado de supabase-js) revocaría también las sesiones reales de estas
+// cuentas en los teléfonos de quienes están probando la app.
 async function cerrarSesion(supabase, storage) {
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
   await cacheBorrar(storage);
 }
 
