@@ -16,7 +16,7 @@ function sugerencias(): string[] {
     '¿Qué se entregó hoy?',
     `¿Cuánto debería cobrarle a Cervecería Rural en ${mes}?`,
     'Dame un resumen del parque',
-    '¿Qué cilindros llevan más de 60 días en un cliente?',
+    '¿Qué cilindros llevan más de 7 días en un cliente?',
   ];
 }
 
