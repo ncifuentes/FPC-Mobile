@@ -5,7 +5,7 @@ export const resumenParque: Herramienta = {
   nombre: 'resumen_parque',
   descripcion:
     'Resumen del parque de cilindros activos: total, cuántos hay en planta, en camión y en clientes, ' +
-    'cuántos son PRO, cuántos siguen en la ubicación del saldo inicial y el desglose por producto.',
+    'cuántos son PRO, cuántos siguen en la ubicación del saldo inicial y los 10 productos con más cilindros.',
   parametros: { type: 'object', properties: {} },
 
   async ejecutar(db) {
@@ -39,8 +39,8 @@ export const resumenParque: Herramienta = {
       en_cliente_desde_saldo_inicial: cilindros.filter(vieneDeSaldo).length,
       clientes_con_cilindros: clientes.size,
       productos_distintos: productos.length,
-      por_producto: productos.slice(0, 30),
-      por_producto_hay_mas: productos.length > 30,
+      // Solo los 10 con más cilindros: para un resumen basta, y el total va en productos_distintos.
+      productos_con_mas_cilindros: productos.slice(0, 10),
     };
   },
 };
