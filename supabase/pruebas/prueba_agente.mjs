@@ -291,7 +291,7 @@ let desplegada = true;
     const tec = await sesion(TEC_A_EMAIL, TEC_A_PASSWORD);
     const r = await llamar(tec.token, { mensajes: [{ rol: 'usuario', texto: 'hola' }] });
     anotar(3, 'técnico → 403', r.status === 403, `status ${r.status}`);
-    await tec.cliente.auth.signOut();
+    await tec.cliente.auth.signOut({ scope: 'local' }); // local: no cierra la sesión de la app de Núñez
     const inv = await llamar(admin.token, { mensajes: [] });
     anotar(3, 'admin con conversación vacía → 400', inv.status === 400, `status ${inv.status}`);
   }
@@ -355,7 +355,8 @@ if (PUNTA_A_PUNTA && desplegada) {
   anotar(4, 'punta a punta', null, 'la función no está desplegada');
 }
 
-await db.auth.signOut();
+// Solo esta sesión: el cierre global (el predeterminado) revoca también la del navegador.
+await db.auth.signOut({ scope: 'local' });
 const fallas = resultados.filter((r) => r.pasa === false);
 const pendientes = resultados.filter((r) => r.pasa === null);
 console.log(`\nResultado: ${resultados.length - fallas.length - pendientes.length} PASA · ${fallas.length} FALLA · ${pendientes.length} PENDIENTE`);
