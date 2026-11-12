@@ -3,7 +3,7 @@
  *
  * Borra los movimientos DE PRUEBA y sus comprobantes, y deja el kit listo para la próxima vez.
  * Un movimiento es de prueba si cumple AL MENOS UNO de estos criterios:
- *   1. es de un cilindro del kit (serie PRUEBA-01 a PRUEBA-05);
+ *   1. es de un cilindro del kit (serie PRUEBA-01 a PRUEBA-06);
  *   2. lo registró una cuenta de prueba (correo @fpc.test);
  *   3. se hizo a una sucursal del CLIENTE DE PRUEBA (RUT 11111111-1);
  *   4. se hizo con el camión PRUEBA.

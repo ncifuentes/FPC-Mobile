@@ -42,7 +42,7 @@ def svg(texto, modulo=3, alto=110, quieta=12):
 
 def main(salida):
     tarjetas, patrones = [], {}
-    for n in range(1, 6):
+    for n in range(1, 7):
         serie, codigo = f'PRUEBA-0{n}', f'KITPRUEBA0{n}'
         s, anchos = svg(codigo)
         patrones[codigo] = anchos
