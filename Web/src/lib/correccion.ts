@@ -74,7 +74,23 @@ export async function cargarAuditoria(uuids: string[]): Promise<RegistroAuditori
     .in('movimiento_uuid', uuids)
     .order('cambiado_en', { ascending: false });
   if (error) throw error;
-  return data;
+  // BUG-05: asignar el folio de la visita es un UPDATE que el trigger registraba
+  // como corrección. No lo es: se descartan los registros que solo cambian el folio.
+  return data.filter((a) => !soloCambiaFolio(a.operacion, a.datos_antes, a.datos_despues));
+}
+
+function soloCambiaFolio(operacion: string, antes: Json, despues: Json | null): boolean {
+  if (operacion !== 'UPDATE' || !despues) return false;
+  const a = (antes ?? {}) as Record<string, unknown>;
+  const d = despues as Record<string, unknown>;
+  const claves = new Set([...Object.keys(a), ...Object.keys(d)]);
+  let cambioFolio = false;
+  for (const k of claves) {
+    if (JSON.stringify(a[k]) === JSON.stringify(d[k])) continue;
+    if (k !== 'folio_operacion') return false;
+    cambioFolio = true;
+  }
+  return cambioFolio;
 }
 
 /** Nombres de quienes corrigieron (usuarios es legible para admin y gerente). */

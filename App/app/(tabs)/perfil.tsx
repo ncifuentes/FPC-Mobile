@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -155,9 +155,29 @@ export default function Perfil() {
         titulo="Cerrar sesión"
         icono="log-out-outline"
         variante="peligro"
-        onPress={async () => {
-          await cerrarSesion();
-          router.replace('/login');
+        onPress={() => {
+          const salir = async () => {
+            await cerrarSesion();
+            router.replace('/login');
+          };
+          // BUG-03: con movimientos sin enviar se avisa antes de cerrar sesión.
+          // No se pierden (se envían cuando vuelve a entrar el mismo técnico),
+          // pero si otro usa el teléfono quedan esperando sin que nadie lo sepa.
+          if (pendientes === 0) {
+            void salir();
+            return;
+          }
+          const titulo = `Tienes ${pendientes === 1 ? '1 movimiento' : `${pendientes} movimientos`} sin enviar`;
+          const texto =
+            'No se pierden, pero solo se envían cuando vuelvas a entrar con tu cuenta. Si puedes, espera a tener señal antes de cerrar sesión.';
+          if (Platform.OS === 'web') {
+            if (window.confirm(`${titulo}\n\n${texto}\n\n¿Cerrar sesión igual?`)) void salir();
+            return;
+          }
+          Alert.alert(titulo, texto, [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Cerrar sesión igual', style: 'destructive', onPress: () => void salir() },
+          ]);
         }}
       />
     </ScrollView>

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { EstadoEnvio } from '../../src/componentes/EstadoEnvio';
+import { Nota } from '../../src/componentes/ui';
 import { useSesion } from '../../src/estado/sesion';
 import { colores, espacios, radios } from '../../src/theme/tokens';
 
@@ -86,7 +87,13 @@ export default function Inicio() {
               </Text>
             </View>
           </View>
-        ) : null}
+        ) : (
+          // BUG-04: sin vehículo, el aviso se ve al entrar y no solo en Perfil.
+          <Nota
+            tono="alerta"
+            texto="Sin camión asignado. Pídele al administrador que te asigne uno para registrar cargas, entregas y retiros."
+          />
+        )}
 
         {DISPOSICION === 'grilla' ? (
           <View style={{ gap: espacios.md }}>

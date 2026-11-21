@@ -133,9 +133,20 @@ export function crearRepositorioMovimientos(cola: ColaLocal): RepositorioMovimie
         ),
         locales((m) => m.camionId === camionId && enRango(m.fechaEvento)),
       ]);
+      // BUG-02: con señal se guarda lo que respondió el servidor; sin señal se
+      // usa esa copia (si es del mismo camión y día) para no perder de vista lo
+      // que ya llegó. Sigue marcado como incompleto: puede faltar lo de otro
+      // teléfono.
+      const dia = `${desde.getFullYear()}-${desde.getMonth() + 1}-${desde.getDate()}`;
+      let respaldo: MovimientoDetallado[] | null = null;
+      if (servidor) {
+        await cacheSesion.guardarDelDia({ camionId, dia, movimientos: servidor }).catch(() => {});
+      } else {
+        respaldo = await cacheSesion.leerDelDia(camionId, dia).catch(() => null);
+      }
       // La pantalla lista del más reciente al más antiguo.
       return {
-        movimientos: combinarHistorial(servidor ?? [], enCola).reverse(),
+        movimientos: combinarHistorial(servidor ?? respaldo ?? [], enCola).reverse(),
         incompleto: servidor === null,
       };
     },

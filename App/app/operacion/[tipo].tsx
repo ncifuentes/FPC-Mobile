@@ -250,8 +250,12 @@ export default function PantallaOperacion() {
       setError('Selecciona primero el cliente y la sucursal.');
       return;
     }
-    if (!usuario || !camion) {
-      setError('No hay sesión o vehículo asignado.');
+    if (!usuario) {
+      setError('No hay una sesión activa. Vuelve a iniciar sesión.');
+      return;
+    }
+    if (!camion) {
+      setError('No tienes un camión asignado. Pídele al administrador que te asigne uno.');
       return;
     }
     if (sobreCapacidad) {
