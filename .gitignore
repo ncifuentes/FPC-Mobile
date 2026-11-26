@@ -2,7 +2,7 @@
 .env.local
 .env.*
 !.env.example
-supabase/.temp/
+**/supabase/.temp/
 .vscode/
 .vs/
-supabase/pruebas/node_modules/
+**/node_modules/
