@@ -14,9 +14,9 @@ Nicolás Cifuentes (análisis, documentación y pruebas).
 
 | Carpeta | Qué es | Detalle |
 |---|---|---|
-| `Fase 2/Evidencias Proyecto/App/` | App móvil del técnico en terreno: Expo + React Native, funciona sin señal | [App/README.md](Fase%202/Evidencias%20Proyecto/App/README.md) |
-| `Fase 2/Evidencias Proyecto/Web/` | Plataforma web del administrador y el gerente: Astro + React | [Web/README.md](Fase%202/Evidencias%20Proyecto/Web/README.md) |
-| `Fase 2/Evidencias Proyecto/supabase/` | Esquema, RLS, funciones, Edge Functions y pruebas del backend | [supabase/PRUEBAS_ESQUEMA.md](Fase%202/Evidencias%20Proyecto/supabase/PRUEBAS_ESQUEMA.md) |
+| `Fase 2/Evidencias Proyecto/Evidencias de sistema/Aplicación/App/` | App móvil del técnico en terreno: Expo + React Native, funciona sin señal | [App/README.md](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/App/README.md) |
+| `Fase 2/Evidencias Proyecto/Evidencias de sistema/Aplicación/Web/` | Plataforma web del administrador y el gerente: Astro + React | [Web/README.md](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/Web/README.md) |
+| `Fase 2/Evidencias Proyecto/Evidencias de sistema/Base de datos/supabase/` | Esquema, RLS, funciones, Edge Functions y pruebas del backend | [supabase/PRUEBAS_ESQUEMA.md](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Base%20de%20datos/supabase/PRUEBAS_ESQUEMA.md) |
 | `Fase 1/`, `Fase 2/`, `Fase 3/` | Evidencias del curso (informes, backlog, sprints, arquitectura) | — |
 
 Las tres partes de software usan el mismo proyecto Supabase. Los permisos viven en la base
@@ -26,7 +26,7 @@ Las tres partes de software usan el mismo proyecto Supabase. Los permisos viven 
 
 ## Base de datos
 
-Las migraciones están en `Fase 2/Evidencias Proyecto/supabase/migrations/` y se aplican con la CLI de Supabase, desde la carpeta `Fase 2/Evidencias Proyecto/`:
+Las migraciones están en `Fase 2/Evidencias Proyecto/Evidencias de sistema/Base de datos/supabase/migrations/` y se aplican con la CLI de Supabase, desde la carpeta `Fase 2/Evidencias Proyecto/Evidencias de sistema/Base de datos/`:
 
 ```bash
 npx supabase migration list --linked   # comparar local con el proyecto
@@ -34,7 +34,7 @@ npx supabase db push --linked          # aplicar las pendientes
 ```
 
 Cada migración se prueba antes dentro de una transacción que se revierte; los resultados
-quedan en `Fase 2/Evidencias Proyecto/supabase/PRUEBAS_ESQUEMA.md`.
+quedan en `Fase 2/Evidencias Proyecto/Evidencias de sistema/Base de datos/supabase/PRUEBAS_ESQUEMA.md`.
 
 ---
 
